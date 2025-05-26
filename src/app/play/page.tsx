@@ -1,13 +1,15 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { Chessboard } from '@/components/chess/chessboard';
 import { AiFeedbackSection } from '@/components/ai/ai-feedback-section';
-import type { BoardState, SquareCoord, ChessPiece } from '@/components/chess/types';
-import { createInitialBoard } from '@/lib/constants';
+import type { BoardState, SquareCoord, ChessPiece, PieceSymbol } from '@/components/chess/types';
+import { createInitialBoard, createPiece } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { RotateCcw, Info, Check } from 'lucide-react';
+import { Piece } from '@/components/chess/piece'; // Import Piece component
 
 export default function PlayPage() {
   const [board, setBoard] = useState<BoardState>(createInitialBoard());
@@ -17,10 +19,13 @@ export default function PlayPage() {
   const [moveHistory, setMoveHistory] = useState<string[]>([]); // Simplified move history
   const [showFeedbackButton, setShowFeedbackButton] = useState(false);
 
+  const [promotingSquare, setPromotingSquare] = useState<SquareCoord | null>(null);
+  const [showPromotionDialog, setShowPromotionDialog] = useState(false);
+
   const makeAiMove = () => {
     if (gameStatus !== 'ongoing') return;
 
-    const newBoard = board.map(row => [...row]); // Deep copy
+    const currentBoard = board.map(row => [...row]); // Use current board state
     let moved = false;
 
     // AI is black. Priority: 1. Pawn Capture, 2. Other Piece Adjacent Capture, 3. Pawn Push, 4. Random Other Piece Move
@@ -30,14 +35,14 @@ export default function PlayPage() {
       const pawnCaptures: { r: number, c: number, targetR: number, targetC: number, piece: ChessPiece }[] = [];
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
-          const piece = newBoard[r][c];
+          const piece = currentBoard[r][c];
           if (piece && piece.color === 'black' && piece.type === 'P') {
-            const captureOffsets = [{ dr: 1, dc: -1 }, { dr: 1, dc: 1 }]; // Pawns move from r to r+1
+            const captureOffsets = [{ dr: 1, dc: -1 }, { dr: 1, dc: 1 }];
             for (const offset of captureOffsets) {
               const targetR = r + offset.dr;
               const targetC = c + offset.dc;
               if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
-                const targetPiece = newBoard[targetR][targetC];
+                const targetPiece = currentBoard[targetR][targetC];
                 if (targetPiece && targetPiece.color === 'white') {
                   pawnCaptures.push({ r, c, targetR, targetC, piece });
                 }
@@ -47,11 +52,16 @@ export default function PlayPage() {
         }
       }
       if (pawnCaptures.length > 0) {
-        const captureToMake = pawnCaptures[Math.floor(Math.random() * pawnCaptures.length)]; // Pick a random pawn capture
-        newBoard[captureToMake.targetR][captureToMake.targetC] = captureToMake.piece;
-        newBoard[captureToMake.r][captureToMake.c] = null;
+        const captureToMake = pawnCaptures[Math.floor(Math.random() * pawnCaptures.length)];
+        currentBoard[captureToMake.targetR][captureToMake.targetC] = captureToMake.piece;
+        currentBoard[captureToMake.r][captureToMake.c] = null;
         moved = true;
         setMoveHistory(prev => [...prev, `AI captures with ${captureToMake.piece.type} from (${captureToMake.r},${captureToMake.c}) to (${captureToMake.targetR},${captureToMake.targetC})`]);
+        // Check for AI pawn promotion after capture
+        if (captureToMake.piece.type === 'P' && captureToMake.targetR === 7) {
+          currentBoard[captureToMake.targetR][captureToMake.targetC] = createPiece('Q', 'black'); // Auto-promote to Queen
+          setMoveHistory(prev => [...prev, `AI promotes pawn to Q at (${captureToMake.targetR},${captureToMake.targetC})`]);
+        }
       }
     }
     
@@ -59,18 +69,18 @@ export default function PlayPage() {
     if (!moved) {
       const otherPieceCaptures: { r: number, c: number, targetR: number, targetC: number, piece: ChessPiece }[] = [];
       const blackPieces: { piece: ChessPiece, r: number, c: number }[] = [];
-      newBoard.forEach((row, r_idx) => row.forEach((p, c_idx) => {
+      currentBoard.forEach((row, r_idx) => row.forEach((p, c_idx) => {
         if (p && p.color === 'black' && p.type !== 'P') blackPieces.push({ piece: p, r: r_idx, c: c_idx });
       }));
 
       for (const bp of blackPieces) {
         const { piece, r, c } = bp;
-        const adjacentOffsets = [[-1,0], [1,0], [0,-1], [0,1], [-1,-1], [-1,1], [1,-1], [1,1]]; // All 8 directions
+        const adjacentOffsets = [[-1,0], [1,0], [0,-1], [0,1], [-1,-1], [-1,1], [1,-1], [1,1]];
         for (const [dr, dc] of adjacentOffsets) {
           const targetR = r + dr;
           const targetC = c + dc;
           if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
-            const targetPiece = newBoard[targetR][targetC];
+            const targetPiece = currentBoard[targetR][targetC];
             if (targetPiece && targetPiece.color === 'white') {
               otherPieceCaptures.push({ r, c, targetR, targetC, piece });
             }
@@ -79,8 +89,8 @@ export default function PlayPage() {
       }
       if (otherPieceCaptures.length > 0) {
         const captureToMake = otherPieceCaptures[Math.floor(Math.random() * otherPieceCaptures.length)];
-        newBoard[captureToMake.targetR][captureToMake.targetC] = captureToMake.piece;
-        newBoard[captureToMake.r][captureToMake.c] = null;
+        currentBoard[captureToMake.targetR][captureToMake.targetC] = captureToMake.piece;
+        currentBoard[captureToMake.r][captureToMake.c] = null;
         moved = true;
         setMoveHistory(prev => [...prev, `AI captures with ${captureToMake.piece.type} from (${captureToMake.r},${captureToMake.c}) to (${captureToMake.targetR},${captureToMake.targetC})`]);
       }
@@ -91,12 +101,12 @@ export default function PlayPage() {
       const pawnPushes: { r: number, c: number, targetR: number, targetC: number, piece: ChessPiece }[] = [];
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
-          const piece = newBoard[r][c];
-          if (piece && piece.color === 'black' && piece.type === 'P' && r + 1 < 8 && !newBoard[r+1][c]) {
-             // Check one square push
-            pawnPushes.push({ r, c, targetR: r + 1, targetC: c, piece });
-             // Check two square initial push
-            if (r === 1 && !newBoard[r+2][c]) { // Pawns start at row 1 for black in this board setup
+          const piece = currentBoard[r][c];
+          if (piece && piece.color === 'black' && piece.type === 'P') {
+            if (r + 1 < 8 && !currentBoard[r+1][c]) {
+              pawnPushes.push({ r, c, targetR: r + 1, targetC: c, piece });
+            }
+            if (r === 1 && !currentBoard[r+1][c] && !currentBoard[r+2][c]) { 
                  pawnPushes.push({ r, c, targetR: r + 2, targetC: c, piece });
             }
           }
@@ -104,17 +114,22 @@ export default function PlayPage() {
       }
       if (pawnPushes.length > 0) {
         const pushToMake = pawnPushes[Math.floor(Math.random() * pawnPushes.length)];
-        newBoard[pushToMake.targetR][pushToMake.targetC] = pushToMake.piece;
-        newBoard[pushToMake.r][pushToMake.c] = null;
+        currentBoard[pushToMake.targetR][pushToMake.targetC] = pushToMake.piece;
+        currentBoard[pushToMake.r][pushToMake.c] = null;
         moved = true;
         setMoveHistory(prev => [...prev, `AI moves ${pushToMake.piece.type} from (${pushToMake.r},${pushToMake.c}) to (${pushToMake.targetR},${pushToMake.targetC})`]);
+        // Check for AI pawn promotion after push
+        if (pushToMake.piece.type === 'P' && pushToMake.targetR === 7) {
+          currentBoard[pushToMake.targetR][pushToMake.targetC] = createPiece('Q', 'black'); // Auto-promote to Queen
+          setMoveHistory(prev => [...prev, `AI promotes pawn to Q at (${pushToMake.targetR},${pushToMake.targetC})`]);
+        }
       }
     }
     
     // 4. Fall back to Random Adjacent Move (Non-Pawn to Empty Square)
     if (!moved) {
       const blackPieces: {piece: ChessPiece, r: number, c: number}[] = [];
-      newBoard.forEach((row, r_idx) => row.forEach((p, c_idx) => {
+      currentBoard.forEach((row, r_idx) => row.forEach((p, c_idx) => {
         if (p && p.color === 'black' && p.type !== 'P') blackPieces.push({piece: p, r: r_idx, c: c_idx});
       }));
 
@@ -128,9 +143,9 @@ export default function PlayPage() {
           for (const [dr, dc] of shuffledMoves) {
             const targetR = r + dr;
             const targetC = c + dc;
-            if (targetR >=0 && targetR < 8 && targetC >=0 && targetC < 8 && !newBoard[targetR][targetC]) {
-              newBoard[targetR][targetC] = piece;
-              newBoard[r][c] = null;
+            if (targetR >=0 && targetR < 8 && targetC >=0 && targetC < 8 && !currentBoard[targetR][targetC]) {
+              currentBoard[targetR][targetC] = piece;
+              currentBoard[r][c] = null;
               moved = true;
               setMoveHistory(prev => [...prev, `AI moves ${piece.type} from (${r},${c}) to (${targetR},${targetC})`]);
               break;
@@ -142,58 +157,51 @@ export default function PlayPage() {
     }
 
     if (moved) {
-      setBoard(newBoard);
-      // Check if AI captured player's King
+      setBoard(currentBoard);
       let playerKingFound = false;
-      newBoard.forEach(row => row.forEach(p => {
+      currentBoard.forEach(row => row.forEach(p => {
         if (p && p.type === 'K' && p.color === 'white') playerKingFound = true;
       }));
       if (!playerKingFound) {
         setGameStatus('ai_win');
         setShowFeedbackButton(true);
-        setIsPlayerTurn(true); // Prevent further player moves
+        setIsPlayerTurn(true); 
         return;
       }
       setIsPlayerTurn(true);
     } else {
-      // If AI cannot move, it's a potential stalemate or win for player
       let aiHasPieces = false;
-      newBoard.forEach(row => row.forEach(p => { if (p && p.color === 'black') aiHasPieces = true; }));
+      currentBoard.forEach(row => row.forEach(p => { if (p && p.color === 'black') aiHasPieces = true; }));
       
-      if (!aiHasPieces) { // No more AI pieces
+      if (!aiHasPieces) {
         setGameStatus('player_win');
-      } else { // AI has pieces but cannot move
-        // Simplified: consider it a win for player if AI is stuck.
-        // A real game would check for stalemate (draw).
+      } else {
         setGameStatus('player_win'); 
       }
       setShowFeedbackButton(true);
-      setIsPlayerTurn(true); // Allow player to see state, but game is over.
+      setIsPlayerTurn(true);
     }
   };
 
   const handleSquareClick = (coord: SquareCoord) => {
-    if (!isPlayerTurn || gameStatus !== 'ongoing') return;
+    if (!isPlayerTurn || gameStatus !== 'ongoing' || showPromotionDialog) return;
 
     const pieceAtSelection = board[coord.row][coord.col];
 
     if (selectedSquare) {
       const pieceToMove = board[selectedSquare.row][selectedSquare.col];
-      if (pieceToMove && pieceToMove.color === 'white') { // Player controls white
-        // Simplified move logic: allow any move to an empty square or capture
+      if (pieceToMove && pieceToMove.color === 'white') {
         const targetPiece = board[coord.row][coord.col];
 
-        if (targetPiece && targetPiece.color === 'white') { // Can't move to square with own piece
-             setSelectedSquare(coord); // Reselect if clicking another white piece
+        if (targetPiece && targetPiece.color === 'white') {
+             setSelectedSquare(coord);
              return;
         }
         
-        // Disallow moving to the same square
         if (selectedSquare.row === coord.row && selectedSquare.col === coord.col) {
-            setSelectedSquare(null); // Deselect
+            setSelectedSquare(null);
             return;
         }
-
 
         const newBoard = board.map(row => [...row]);
         newBoard[coord.row][coord.col] = pieceToMove;
@@ -204,6 +212,10 @@ export default function PlayPage() {
         if (targetPiece && targetPiece.type === 'K' && targetPiece.color === 'black') {
             setGameStatus('player_win');
             setShowFeedbackButton(true);
+        } else if (pieceToMove.type === 'P' && coord.row === 0) { // Player (White) pawn promotion
+            setPromotingSquare(coord);
+            setShowPromotionDialog(true);
+            // Turn is not switched yet, player needs to choose promotion
         } else {
             setIsPlayerTurn(false);
             setTimeout(makeAiMove, 500);
@@ -216,6 +228,32 @@ export default function PlayPage() {
       }
     }
   };
+
+  const handlePromotionChoice = (promotionPieceType: PieceSymbol) => {
+    if (!promotingSquare) return;
+
+    const newBoard = board.map(row => [...row]);
+    newBoard[promotingSquare.row][promotingSquare.col] = createPiece(promotionPieceType, 'white');
+    setBoard(newBoard);
+    setMoveHistory(prev => [...prev, `Player promotes pawn to ${promotionPieceType} at (${promotingSquare.row},${promotingSquare.col})`]);
+
+    setShowPromotionDialog(false);
+    setPromotingSquare(null);
+
+    // Check if promotion led to AI King capture (unlikely but good to check)
+    let aiKingFound = false;
+    newBoard.forEach(row => row.forEach(p => {
+        if (p && p.type === 'K' && p.color === 'black') aiKingFound = true;
+    }));
+    if (!aiKingFound) {
+        setGameStatus('player_win');
+        setShowFeedbackButton(true);
+        return; 
+    }
+
+    setIsPlayerTurn(false);
+    setTimeout(makeAiMove, 500);
+  };
   
   const resetGame = () => {
     setBoard(createInitialBoard());
@@ -224,43 +262,50 @@ export default function PlayPage() {
     setGameStatus('ongoing');
     setMoveHistory([]);
     setShowFeedbackButton(false);
+    setShowPromotionDialog(false);
+    setPromotingSquare(null);
   };
 
   const generateMockPgn = () => {
     if(moveHistory.length === 0) return "1. e4 e5 *";
+    // Simplified PGN, does not handle promotion notation like e8=Q
     return moveHistory
       .map((move, index) => {
-        const parts = move.split(' '); // e.g. "Player", "moves", "P", "from", "(6,4)", "to", "(4,4)"
-                                      // or "AI", "captures", "with", "P", "from", "(1,3)", "to", "(2,4)"
-        let notation = "??"; // Default for unknown
-        if (parts.length > 4) {
+        const parts = move.split(' '); 
+        let notation = "??"; 
+        if (parts.length > 4 && parts.includes("moves") || parts.includes("captures")) {
             const pieceType = parts.includes("with") ? parts[3] : parts[2];
-            const toSq = parts[parts.length -1]; // e.g. (4,4) or (2,4)
+            const toSq = parts[parts.length -1]; 
             const fromSq = parts[parts.length -3]; 
             
-            // Crude conversion to algebraic-like notation
-            // Needs proper algebraic notation conversion for real PGN
             const toCol = String.fromCharCode(97 + parseInt(toSq.substring(3,4)));
-            const toRow = 8 - parseInt(toSq.substring(1,2));
+            const toRowAn = 8 - parseInt(toSq.substring(1,2)); // Algebraic notation row
             const fromCol = String.fromCharCode(97 + parseInt(fromSq.substring(3,4)));
-            const fromRow = 8 - parseInt(fromSq.substring(1,2));
+            // const fromRowAn = 8 - parseInt(fromSq.substring(1,2));
 
             const action = move.toLowerCase().includes("capture") ? "x" : "";
             
-            // For pawns, usually just destination, or file for capture
             if (pieceType === "P") {
-                notation = action ? `${fromCol}x${toCol}${toRow}` : `${toCol}${toRow}`;
+                notation = action ? `${fromCol}x${toCol}${toRowAn}` : `${toCol}${toRowAn}`;
             } else {
-                notation = `${pieceType}${action}${toCol}${toRow}`;
+                notation = `${pieceType}${action}${toCol}${toRowAn}`;
             }
+        } else if (move.toLowerCase().includes("promotes")) {
+            // e.g. "Player promotes pawn to Q at (0,4)"
+            const toSq = parts[parts.length -1];
+            const toCol = String.fromCharCode(97 + parseInt(toSq.substring(3,4)));
+            const toRowAn = 8 - parseInt(toSq.substring(1,2));
+            const promotedPiece = parts[parts.length -3];
+            notation = `${toCol}${toRowAn}=${promotedPiece}`;
         }
+
 
         if(index % 2 === 0) return `${Math.floor(index/2) + 1}. ${notation}`; 
         return `${notation}`; 
       })
       .reduce((acc, part, index) => {
         if(index % 2 === 0) return `${acc} ${part}`;
-        return `${acc} ${part}`; // AI move directly after player move on same line number part
+        return `${acc} ${part}`;
       }, "").trim() + (gameStatus === 'player_win' ? " 1-0" : gameStatus === 'ai_win' ? " 0-1" : gameStatus === 'draw' ? " 1/2-1/2" : " *");
   };
 
@@ -275,13 +320,36 @@ export default function PlayPage() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 relative"> {/* Added relative for positioning promotion dialog */}
           <Chessboard 
             boardState={board} 
             onSquareClick={handleSquareClick}
             selectedSquare={selectedSquare}
-            disabled={!isPlayerTurn || gameStatus !== 'ongoing'}
+            disabled={!isPlayerTurn || gameStatus !== 'ongoing' || showPromotionDialog}
           />
+           {showPromotionDialog && promotingSquare && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-md">
+              <Card className="p-4 shadow-2xl w-auto">
+                <CardHeader className="p-3">
+                  <CardTitle className="text-xl">Promote Pawn</CardTitle>
+                  <CardDescription className="text-sm">Choose a piece:</CardDescription>
+                </CardHeader>
+                <CardContent className="p-3 flex justify-center space-x-2">
+                  {(['Q', 'R', 'B', 'N'] as PieceSymbol[]).map(pieceType => (
+                    <Button 
+                      key={pieceType} 
+                      onClick={() => handlePromotionChoice(pieceType)} 
+                      variant="outline" 
+                      className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center hover:bg-accent focus:bg-accent"
+                      aria-label={`Promote to ${pieceType}`}
+                    >
+                      <Piece piece={createPiece(pieceType, 'white')} />
+                    </Button>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -297,7 +365,7 @@ export default function PlayPage() {
               <p className="flex items-center">
                 <Check className="mr-2 h-5 w-5 text-green-500" />
                 Turn: <span className="font-semibold ml-1">
-                  {gameStatus === 'ongoing' ? (isPlayerTurn ? 'Your (White)' : 'AI (Black)') : 'Game Over'}
+                  {gameStatus === 'ongoing' ? (isPlayerTurn ? (showPromotionDialog ? 'Promoting...' : 'Your (White)') : 'AI (Black)') : 'Game Over'}
                 </span>
               </p>
               <Button onClick={resetGame} variant="outline" className="w-full">
@@ -306,7 +374,7 @@ export default function PlayPage() {
             </CardContent>
           </Card>
 
-          {gameStatus !== 'ongoing' && ( // Show feedback button only when game is over
+          {gameStatus !== 'ongoing' && (
             <AiFeedbackSection 
               gameHistoryPgn={generateMockPgn()}
               playerRating={1200} 
@@ -316,16 +384,7 @@ export default function PlayPage() {
           )}
            {gameStatus === 'ongoing' && moveHistory.length > 5 && !showFeedbackButton && (
             <Button onClick={() => {
-              // For mid-game feedback, we'd likely not alter gameStatus
-              // but just show the feedback section. This button is for demonstration.
-              // In a real app, this might call a different AI flow or allow continuing play.
-              // For now, let's just make it available to show the feedback section.
-              // This button itself doesn't trigger AI currently in this demo.
-              // To show section, setShowFeedbackButton(true) would be needed.
-              // This is simplified, we'll just make a button that *could* request feedback.
-              // The existing feedback section is tied to gameStatus !== 'ongoing'
-              // We might need a different component or conditional logic for mid-game.
-              // For now, this button doesn't do much except be a placeholder.
+              // This button is conceptual for mid-game feedback
             }} variant="secondary" className="w-full" title="Mid-game feedback (concept)">
               Request Mid-Game Feedback (Concept)
             </Button>
@@ -347,3 +406,4 @@ export default function PlayPage() {
   );
 }
 
+    
