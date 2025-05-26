@@ -4,13 +4,10 @@ import { useState, useEffect } from 'react';
 import { Chessboard } from '@/components/chess/chessboard';
 import { AiFeedbackSection } from '@/components/ai/ai-feedback-section';
 import type { BoardState, SquareCoord, ChessPiece } from '@/components/chess/types';
-import { createInitialBoard, createPiece, INITIAL_FEN_STANDARD } from '@/lib/constants';
+import { createInitialBoard } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RotateCcw, Info, Check } from 'lucide-react';
-
-// This is a very simplified mock of game play.
-// A real chess game would require a proper chess engine/library.
 
 export default function PlayPage() {
   const [board, setBoard] = useState<BoardState>(createInitialBoard());
@@ -20,98 +17,201 @@ export default function PlayPage() {
   const [moveHistory, setMoveHistory] = useState<string[]>([]); // Simplified move history
   const [showFeedbackButton, setShowFeedbackButton] = useState(false);
 
-  // Mock AI move
   const makeAiMove = () => {
     if (gameStatus !== 'ongoing') return;
 
-    // Super simple AI: finds first black piece and tries to move it one step forward if pawn, or randomly.
-    const newBoard = board.map(row => row.slice());
+    const newBoard = board.map(row => [...row]); // Deep copy
     let moved = false;
-    
-    // Try to find a pawn to move
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const piece = newBoard[r][c];
-        if (piece && piece.color === 'black' && piece.type === 'P' && r + 1 < 8 && !newBoard[r+1][c]) {
-          newBoard[r+1][c] = piece;
-          newBoard[r][c] = null;
-          moved = true;
-          setMoveHistory(prev => [...prev, `AI moves ${piece.type} from (${r},${c}) to (${r+1},${c})`]);
-          break;
+
+    // AI is black. Priority: 1. Pawn Capture, 2. Other Piece Adjacent Capture, 3. Pawn Push, 4. Random Other Piece Move
+
+    // 1. Prioritize Pawn Captures
+    if (!moved) {
+      const pawnCaptures: { r: number, c: number, targetR: number, targetC: number, piece: ChessPiece }[] = [];
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = newBoard[r][c];
+          if (piece && piece.color === 'black' && piece.type === 'P') {
+            const captureOffsets = [{ dr: 1, dc: -1 }, { dr: 1, dc: 1 }]; // Pawns move from r to r+1
+            for (const offset of captureOffsets) {
+              const targetR = r + offset.dr;
+              const targetC = c + offset.dc;
+              if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
+                const targetPiece = newBoard[targetR][targetC];
+                if (targetPiece && targetPiece.color === 'white') {
+                  pawnCaptures.push({ r, c, targetR, targetC, piece });
+                }
+              }
+            }
+          }
         }
       }
-      if (moved) break;
+      if (pawnCaptures.length > 0) {
+        const captureToMake = pawnCaptures[Math.floor(Math.random() * pawnCaptures.length)]; // Pick a random pawn capture
+        newBoard[captureToMake.targetR][captureToMake.targetC] = captureToMake.piece;
+        newBoard[captureToMake.r][captureToMake.c] = null;
+        moved = true;
+        setMoveHistory(prev => [...prev, `AI captures with ${captureToMake.piece.type} from (${captureToMake.r},${captureToMake.c}) to (${captureToMake.targetR},${captureToMake.targetC})`]);
+      }
+    }
+    
+    // 2. Prioritize Other Piece Adjacent Captures (Simplified)
+    if (!moved) {
+      const otherPieceCaptures: { r: number, c: number, targetR: number, targetC: number, piece: ChessPiece }[] = [];
+      const blackPieces: { piece: ChessPiece, r: number, c: number }[] = [];
+      newBoard.forEach((row, r_idx) => row.forEach((p, c_idx) => {
+        if (p && p.color === 'black' && p.type !== 'P') blackPieces.push({ piece: p, r: r_idx, c: c_idx });
+      }));
+
+      for (const bp of blackPieces) {
+        const { piece, r, c } = bp;
+        const adjacentOffsets = [[-1,0], [1,0], [0,-1], [0,1], [-1,-1], [-1,1], [1,-1], [1,1]]; // All 8 directions
+        for (const [dr, dc] of adjacentOffsets) {
+          const targetR = r + dr;
+          const targetC = c + dc;
+          if (targetR >= 0 && targetR < 8 && targetC >= 0 && targetC < 8) {
+            const targetPiece = newBoard[targetR][targetC];
+            if (targetPiece && targetPiece.color === 'white') {
+              otherPieceCaptures.push({ r, c, targetR, targetC, piece });
+            }
+          }
+        }
+      }
+      if (otherPieceCaptures.length > 0) {
+        const captureToMake = otherPieceCaptures[Math.floor(Math.random() * otherPieceCaptures.length)];
+        newBoard[captureToMake.targetR][captureToMake.targetC] = captureToMake.piece;
+        newBoard[captureToMake.r][captureToMake.c] = null;
+        moved = true;
+        setMoveHistory(prev => [...prev, `AI captures with ${captureToMake.piece.type} from (${captureToMake.r},${captureToMake.c}) to (${captureToMake.targetR},${captureToMake.targetC})`]);
+      }
     }
 
-    // If no pawn move, try any other random valid move (very simplified)
+    // 3. Fall back to Pawn Push
+    if (!moved) {
+      const pawnPushes: { r: number, c: number, targetR: number, targetC: number, piece: ChessPiece }[] = [];
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = newBoard[r][c];
+          if (piece && piece.color === 'black' && piece.type === 'P' && r + 1 < 8 && !newBoard[r+1][c]) {
+             // Check one square push
+            pawnPushes.push({ r, c, targetR: r + 1, targetC: c, piece });
+             // Check two square initial push
+            if (r === 1 && !newBoard[r+2][c]) { // Pawns start at row 1 for black in this board setup
+                 pawnPushes.push({ r, c, targetR: r + 2, targetC: c, piece });
+            }
+          }
+        }
+      }
+      if (pawnPushes.length > 0) {
+        const pushToMake = pawnPushes[Math.floor(Math.random() * pawnPushes.length)];
+        newBoard[pushToMake.targetR][pushToMake.targetC] = pushToMake.piece;
+        newBoard[pushToMake.r][pushToMake.c] = null;
+        moved = true;
+        setMoveHistory(prev => [...prev, `AI moves ${pushToMake.piece.type} from (${pushToMake.r},${pushToMake.c}) to (${pushToMake.targetR},${pushToMake.targetC})`]);
+      }
+    }
+    
+    // 4. Fall back to Random Adjacent Move (Non-Pawn to Empty Square)
     if (!moved) {
       const blackPieces: {piece: ChessPiece, r: number, c: number}[] = [];
       newBoard.forEach((row, r_idx) => row.forEach((p, c_idx) => {
-        if (p && p.color === 'black') blackPieces.push({piece: p, r: r_idx, c: c_idx});
+        if (p && p.color === 'black' && p.type !== 'P') blackPieces.push({piece: p, r: r_idx, c: c_idx});
       }));
 
       if (blackPieces.length > 0) {
-        const randomPiece = blackPieces[Math.floor(Math.random() * blackPieces.length)];
-        // Try to move to an empty adjacent square (very basic)
-        const possibleAiMoves = [[-1,0], [1,0], [0,-1], [0,1]].map(([dr, dc]) => ({r:randomPiece.r+dr, c:randomPiece.c+dc}));
-        for (const move of possibleAiMoves) {
-          if (move.r >=0 && move.r < 8 && move.c >=0 && move.c < 8 && !newBoard[move.r][move.c]) {
-            newBoard[move.r][move.c] = randomPiece.piece;
-            newBoard[randomPiece.r][randomPiece.c] = null;
-            moved = true;
-            setMoveHistory(prev => [...prev, `AI moves ${randomPiece.piece.type} from (${randomPiece.r},${randomPiece.c}) to (${move.r},${move.c})`]);
-            break;
+        const shuffledPieces = [...blackPieces].sort(() => 0.5 - Math.random());
+        for (const randomPiece of shuffledPieces) {
+          const { piece, r, c } = randomPiece;
+          const possibleAiMoves = [[-1,0], [1,0], [0,-1], [0,1], [-1,-1], [-1,1], [1,-1], [1,1]];
+          const shuffledMoves = [...possibleAiMoves].sort(() => 0.5 - Math.random());
+
+          for (const [dr, dc] of shuffledMoves) {
+            const targetR = r + dr;
+            const targetC = c + dc;
+            if (targetR >=0 && targetR < 8 && targetC >=0 && targetC < 8 && !newBoard[targetR][targetC]) {
+              newBoard[targetR][targetC] = piece;
+              newBoard[r][c] = null;
+              moved = true;
+              setMoveHistory(prev => [...prev, `AI moves ${piece.type} from (${r},${c}) to (${targetR},${targetC})`]);
+              break;
+            }
           }
+          if (moved) break;
         }
       }
     }
 
     if (moved) {
       setBoard(newBoard);
+      // Check if AI captured player's King
+      let playerKingFound = false;
+      newBoard.forEach(row => row.forEach(p => {
+        if (p && p.type === 'K' && p.color === 'white') playerKingFound = true;
+      }));
+      if (!playerKingFound) {
+        setGameStatus('ai_win');
+        setShowFeedbackButton(true);
+        setIsPlayerTurn(true); // Prevent further player moves
+        return;
+      }
+      setIsPlayerTurn(true);
     } else {
       // If AI cannot move, it's a potential stalemate or win for player
-      setGameStatus('player_win'); // Simplified
+      let aiHasPieces = false;
+      newBoard.forEach(row => row.forEach(p => { if (p && p.color === 'black') aiHasPieces = true; }));
+      
+      if (!aiHasPieces) { // No more AI pieces
+        setGameStatus('player_win');
+      } else { // AI has pieces but cannot move
+        // Simplified: consider it a win for player if AI is stuck.
+        // A real game would check for stalemate (draw).
+        setGameStatus('player_win'); 
+      }
       setShowFeedbackButton(true);
-      return;
+      setIsPlayerTurn(true); // Allow player to see state, but game is over.
     }
-    
-    setIsPlayerTurn(true);
   };
 
   const handleSquareClick = (coord: SquareCoord) => {
     if (!isPlayerTurn || gameStatus !== 'ongoing') return;
 
+    const pieceAtSelection = board[coord.row][coord.col];
+
     if (selectedSquare) {
-      const piece = board[selectedSquare.row][selectedSquare.col];
-      if (piece && piece.color === 'white') { // Player controls white
+      const pieceToMove = board[selectedSquare.row][selectedSquare.col];
+      if (pieceToMove && pieceToMove.color === 'white') { // Player controls white
         // Simplified move logic: allow any move to an empty square or capture
         const targetPiece = board[coord.row][coord.col];
+
         if (targetPiece && targetPiece.color === 'white') { // Can't move to square with own piece
-             setSelectedSquare(coord); // Reselect
+             setSelectedSquare(coord); // Reselect if clicking another white piece
              return;
         }
+        
+        // Disallow moving to the same square
+        if (selectedSquare.row === coord.row && selectedSquare.col === coord.col) {
+            setSelectedSquare(null); // Deselect
+            return;
+        }
 
-        const newBoard = board.map(row => row.slice());
-        newBoard[coord.row][coord.col] = piece;
+
+        const newBoard = board.map(row => [...row]);
+        newBoard[coord.row][coord.col] = pieceToMove;
         newBoard[selectedSquare.row][selectedSquare.col] = null;
         setBoard(newBoard);
-        setMoveHistory(prev => [...prev, `Player moves ${piece.type} from (${selectedSquare.row},${selectedSquare.col}) to (${coord.row},${coord.col})`]);
+        setMoveHistory(prev => [...prev, `Player moves ${pieceToMove.type} from (${selectedSquare.row},${selectedSquare.col}) to (${coord.row},${coord.col})`]);
         
-        // Check for simple "win" condition: e.g. player takes AI king
         if (targetPiece && targetPiece.type === 'K' && targetPiece.color === 'black') {
             setGameStatus('player_win');
             setShowFeedbackButton(true);
         } else {
             setIsPlayerTurn(false);
-            // Trigger AI move after a short delay
             setTimeout(makeAiMove, 500);
         }
       }
       setSelectedSquare(null);
     } else {
-      // Select piece
-      const piece = board[coord.row][coord.col];
-      if (piece && piece.color === 'white') {
+      if (pieceAtSelection && pieceAtSelection.color === 'white') {
         setSelectedSquare(coord);
       }
     }
@@ -126,20 +226,42 @@ export default function PlayPage() {
     setShowFeedbackButton(false);
   };
 
-  // Mock PGN
   const generateMockPgn = () => {
-    if(moveHistory.length === 0) return "1. e4 e5 *"; // Default if no moves
-    // This is a very crude PGN, real PGN is more complex
+    if(moveHistory.length === 0) return "1. e4 e5 *";
     return moveHistory
       .map((move, index) => {
-        // Assuming player moves first (odd indices in simplified notation are player)
-        if(index % 2 === 0) return `${Math.floor(index/2) + 1}. ${move.split(' ')[2] || 'e4'}`; // Player's part of move
-        return `${move.split(' ')[2] || 'e5'}`; // AI's part of move
+        const parts = move.split(' '); // e.g. "Player", "moves", "P", "from", "(6,4)", "to", "(4,4)"
+                                      // or "AI", "captures", "with", "P", "from", "(1,3)", "to", "(2,4)"
+        let notation = "??"; // Default for unknown
+        if (parts.length > 4) {
+            const pieceType = parts.includes("with") ? parts[3] : parts[2];
+            const toSq = parts[parts.length -1]; // e.g. (4,4) or (2,4)
+            const fromSq = parts[parts.length -3]; 
+            
+            // Crude conversion to algebraic-like notation
+            // Needs proper algebraic notation conversion for real PGN
+            const toCol = String.fromCharCode(97 + parseInt(toSq.substring(3,4)));
+            const toRow = 8 - parseInt(toSq.substring(1,2));
+            const fromCol = String.fromCharCode(97 + parseInt(fromSq.substring(3,4)));
+            const fromRow = 8 - parseInt(fromSq.substring(1,2));
+
+            const action = move.toLowerCase().includes("capture") ? "x" : "";
+            
+            // For pawns, usually just destination, or file for capture
+            if (pieceType === "P") {
+                notation = action ? `${fromCol}x${toCol}${toRow}` : `${toCol}${toRow}`;
+            } else {
+                notation = `${pieceType}${action}${toCol}${toRow}`;
+            }
+        }
+
+        if(index % 2 === 0) return `${Math.floor(index/2) + 1}. ${notation}`; 
+        return `${notation}`; 
       })
       .reduce((acc, part, index) => {
         if(index % 2 === 0) return `${acc} ${part}`;
-        return `${acc}${part}`;
-      }, "").trim() + " *"; // Game result unknown
+        return `${acc} ${part}`; // AI move directly after player move on same line number part
+      }, "").trim() + (gameStatus === 'player_win' ? " 1-0" : gameStatus === 'ai_win' ? " 0-1" : gameStatus === 'draw' ? " 1/2-1/2" : " *");
   };
 
 
@@ -174,7 +296,9 @@ export default function PlayPage() {
               </p>
               <p className="flex items-center">
                 <Check className="mr-2 h-5 w-5 text-green-500" />
-                Turn: <span className="font-semibold ml-1">{isPlayerTurn ? 'Your (White)' : 'AI (Black)'}</span>
+                Turn: <span className="font-semibold ml-1">
+                  {gameStatus === 'ongoing' ? (isPlayerTurn ? 'Your (White)' : 'AI (Black)') : 'Game Over'}
+                </span>
               </p>
               <Button onClick={resetGame} variant="outline" className="w-full">
                 <RotateCcw className="mr-2 h-4 w-4" /> Reset Game
@@ -182,20 +306,28 @@ export default function PlayPage() {
             </CardContent>
           </Card>
 
-          {gameStatus !== 'ongoing' && showFeedbackButton && (
+          {gameStatus !== 'ongoing' && ( // Show feedback button only when game is over
             <AiFeedbackSection 
               gameHistoryPgn={generateMockPgn()}
-              playerRating={1200} // Mocked
-              opponentRating={1150} // Mocked
-              userName="Player1" // Mocked
+              playerRating={1200} 
+              opponentRating={1150} 
+              userName="Player1"
             />
           )}
-          {gameStatus !== 'ongoing' && !showFeedbackButton && (
-             <Button onClick={() => setShowFeedbackButton(true)} className="w-full">Show AI Feedback Button</Button>
-          )}
-           {gameStatus === 'ongoing' && moveHistory.length > 5 && !showFeedbackButton && ( // Show feedback button mid-game after some moves
-            <Button onClick={() => setShowFeedbackButton(true)} variant="secondary" className="w-full">
-              Request Mid-Game Feedback
+           {gameStatus === 'ongoing' && moveHistory.length > 5 && !showFeedbackButton && (
+            <Button onClick={() => {
+              // For mid-game feedback, we'd likely not alter gameStatus
+              // but just show the feedback section. This button is for demonstration.
+              // In a real app, this might call a different AI flow or allow continuing play.
+              // For now, let's just make it available to show the feedback section.
+              // This button itself doesn't trigger AI currently in this demo.
+              // To show section, setShowFeedbackButton(true) would be needed.
+              // This is simplified, we'll just make a button that *could* request feedback.
+              // The existing feedback section is tied to gameStatus !== 'ongoing'
+              // We might need a different component or conditional logic for mid-game.
+              // For now, this button doesn't do much except be a placeholder.
+            }} variant="secondary" className="w-full" title="Mid-game feedback (concept)">
+              Request Mid-Game Feedback (Concept)
             </Button>
           )}
         </div>
@@ -214,3 +346,4 @@ export default function PlayPage() {
     </div>
   );
 }
+
