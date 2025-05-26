@@ -4,12 +4,14 @@
 import { useState, useEffect } from 'react';
 import { Chessboard } from '@/components/chess/chessboard';
 import { AiFeedbackSection } from '@/components/ai/ai-feedback-section';
-import type { BoardState, SquareCoord, ChessPiece, PieceSymbol } from '@/components/chess/types';
+import type { BoardState, SquareCoord, ChessPiece, PieceSymbol, PieceStyle, BoardTheme } from '@/components/chess/types';
 import { createInitialBoard, createPiece } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { RotateCcw, Info, Check } from 'lucide-react';
+import { RotateCcw, Info, Check, Settings } from 'lucide-react';
 import { Piece } from '@/components/chess/piece'; // Import Piece component
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 export default function PlayPage() {
   const [board, setBoard] = useState<BoardState>(createInitialBoard());
@@ -22,10 +24,14 @@ export default function PlayPage() {
   const [promotingSquare, setPromotingSquare] = useState<SquareCoord | null>(null);
   const [showPromotionDialog, setShowPromotionDialog] = useState(false);
 
+  const [pieceStyle, setPieceStyle] = useState<PieceStyle>('unicode');
+  const [boardTheme, setBoardTheme] = useState<BoardTheme>('default');
+
+
   const makeAiMove = () => {
     if (gameStatus !== 'ongoing') return;
 
-    const currentBoard = board.map(row => [...row]); // Use current board state
+    const currentBoard = board.map(row => [...row]); 
     let moved = false;
 
     // AI is black. Priority: 1. Pawn Capture, 2. Other Piece Adjacent Capture, 3. Pawn Push, 4. Random Other Piece Move
@@ -57,9 +63,8 @@ export default function PlayPage() {
         currentBoard[captureToMake.r][captureToMake.c] = null;
         moved = true;
         setMoveHistory(prev => [...prev, `AI captures with ${captureToMake.piece.type} from (${captureToMake.r},${captureToMake.c}) to (${captureToMake.targetR},${captureToMake.targetC})`]);
-        // Check for AI pawn promotion after capture
         if (captureToMake.piece.type === 'P' && captureToMake.targetR === 7) {
-          currentBoard[captureToMake.targetR][captureToMake.targetC] = createPiece('Q', 'black'); // Auto-promote to Queen
+          currentBoard[captureToMake.targetR][captureToMake.targetC] = createPiece('Q', 'black'); 
           setMoveHistory(prev => [...prev, `AI promotes pawn to Q at (${captureToMake.targetR},${captureToMake.targetC})`]);
         }
       }
@@ -118,9 +123,8 @@ export default function PlayPage() {
         currentBoard[pushToMake.r][pushToMake.c] = null;
         moved = true;
         setMoveHistory(prev => [...prev, `AI moves ${pushToMake.piece.type} from (${pushToMake.r},${pushToMake.c}) to (${pushToMake.targetR},${pushToMake.targetC})`]);
-        // Check for AI pawn promotion after push
         if (pushToMake.piece.type === 'P' && pushToMake.targetR === 7) {
-          currentBoard[pushToMake.targetR][pushToMake.targetC] = createPiece('Q', 'black'); // Auto-promote to Queen
+          currentBoard[pushToMake.targetR][pushToMake.targetC] = createPiece('Q', 'black'); 
           setMoveHistory(prev => [...prev, `AI promotes pawn to Q at (${pushToMake.targetR},${pushToMake.targetC})`]);
         }
       }
@@ -212,10 +216,9 @@ export default function PlayPage() {
         if (targetPiece && targetPiece.type === 'K' && targetPiece.color === 'black') {
             setGameStatus('player_win');
             setShowFeedbackButton(true);
-        } else if (pieceToMove.type === 'P' && coord.row === 0) { // Player (White) pawn promotion
+        } else if (pieceToMove.type === 'P' && coord.row === 0) { 
             setPromotingSquare(coord);
             setShowPromotionDialog(true);
-            // Turn is not switched yet, player needs to choose promotion
         } else {
             setIsPlayerTurn(false);
             setTimeout(makeAiMove, 500);
@@ -240,7 +243,6 @@ export default function PlayPage() {
     setShowPromotionDialog(false);
     setPromotingSquare(null);
 
-    // Check if promotion led to AI King capture (unlikely but good to check)
     let aiKingFound = false;
     newBoard.forEach(row => row.forEach(p => {
         if (p && p.type === 'K' && p.color === 'black') aiKingFound = true;
@@ -268,7 +270,6 @@ export default function PlayPage() {
 
   const generateMockPgn = () => {
     if(moveHistory.length === 0) return "1. e4 e5 *";
-    // Simplified PGN, does not handle promotion notation like e8=Q
     return moveHistory
       .map((move, index) => {
         const parts = move.split(' '); 
@@ -279,10 +280,9 @@ export default function PlayPage() {
             const fromSq = parts[parts.length -3]; 
             
             const toCol = String.fromCharCode(97 + parseInt(toSq.substring(3,4)));
-            const toRowAn = 8 - parseInt(toSq.substring(1,2)); // Algebraic notation row
+            const toRowAn = 8 - parseInt(toSq.substring(1,2)); 
             const fromCol = String.fromCharCode(97 + parseInt(fromSq.substring(3,4)));
-            // const fromRowAn = 8 - parseInt(fromSq.substring(1,2));
-
+            
             const action = move.toLowerCase().includes("capture") ? "x" : "";
             
             if (pieceType === "P") {
@@ -291,14 +291,12 @@ export default function PlayPage() {
                 notation = `${pieceType}${action}${toCol}${toRowAn}`;
             }
         } else if (move.toLowerCase().includes("promotes")) {
-            // e.g. "Player promotes pawn to Q at (0,4)"
             const toSq = parts[parts.length -1];
             const toCol = String.fromCharCode(97 + parseInt(toSq.substring(3,4)));
             const toRowAn = 8 - parseInt(toSq.substring(1,2));
             const promotedPiece = parts[parts.length -3];
             notation = `${toCol}${toRowAn}=${promotedPiece}`;
         }
-
 
         if(index % 2 === 0) return `${Math.floor(index/2) + 1}. ${notation}`; 
         return `${notation}`; 
@@ -320,12 +318,14 @@ export default function PlayPage() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-        <div className="md:col-span-2 relative"> {/* Added relative for positioning promotion dialog */}
+        <div className="md:col-span-2 relative"> 
           <Chessboard 
             boardState={board} 
             onSquareClick={handleSquareClick}
             selectedSquare={selectedSquare}
             disabled={!isPlayerTurn || gameStatus !== 'ongoing' || showPromotionDialog}
+            pieceStyle={pieceStyle}
+            boardTheme={boardTheme}
           />
            {showPromotionDialog && promotingSquare && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-md">
@@ -335,15 +335,15 @@ export default function PlayPage() {
                   <CardDescription className="text-sm">Choose a piece:</CardDescription>
                 </CardHeader>
                 <CardContent className="p-3 flex justify-center space-x-2">
-                  {(['Q', 'R', 'B', 'N'] as PieceSymbol[]).map(pieceType => (
+                  {(['Q', 'R', 'B', 'N'] as PieceSymbol[]).map(pType => (
                     <Button 
-                      key={pieceType} 
-                      onClick={() => handlePromotionChoice(pieceType)} 
+                      key={pType} 
+                      onClick={() => handlePromotionChoice(pType)} 
                       variant="outline" 
                       className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center hover:bg-accent focus:bg-accent"
-                      aria-label={`Promote to ${pieceType}`}
+                      aria-label={`Promote to ${pType}`}
                     >
-                      <Piece piece={createPiece(pieceType, 'white')} />
+                      <Piece piece={createPiece(pType, 'white')} pieceStyle={pieceStyle} />
                     </Button>
                   ))}
                 </CardContent>
@@ -371,6 +371,40 @@ export default function PlayPage() {
               <Button onClick={resetGame} variant="outline" className="w-full">
                 <RotateCcw className="mr-2 h-4 w-4" /> Reset Game
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-md">
+            <CardHeader>
+              <CardTitle className="flex items-center"><Settings className="mr-2 h-5 w-5 text-gray-600" />Board & Piece Styles</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="piece-style">Piece Style</Label>
+                <Select value={pieceStyle} onValueChange={(value) => setPieceStyle(value as PieceStyle)}>
+                  <SelectTrigger id="piece-style">
+                    <SelectValue placeholder="Select piece style" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unicode">Unicode</SelectItem>
+                    <SelectItem value="graphical">Graphical (Basic)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="board-theme">Board Theme</Label>
+                <Select value={boardTheme} onValueChange={(value) => setBoardTheme(value as BoardTheme)}>
+                  <SelectTrigger id="board-theme">
+                    <SelectValue placeholder="Select board theme" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default</SelectItem>
+                    <SelectItem value="green">Green</SelectItem>
+                    <SelectItem value="blue">Blue</SelectItem>
+                    <SelectItem value="brown">Brown (Wood-like)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardContent>
           </Card>
 
@@ -405,5 +439,3 @@ export default function PlayPage() {
     </div>
   );
 }
-
-    

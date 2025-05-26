@@ -1,3 +1,4 @@
+
 export type PieceSymbol = 'P' | 'R' | 'N' | 'B' | 'Q' | 'K';
 export type PieceColor = 'white' | 'black';
 
@@ -39,3 +40,7 @@ export interface Tutorial {
   // or a series of text instructions related to the initial board.
   learningObjectives: string[];
 }
+
+export type PieceStyle = 'unicode' | 'graphical';
+export type BoardTheme = 'default' | 'green' | 'blue' | 'brown';
+
