@@ -1,3 +1,5 @@
+import React from 'react';
+import type { JSX } from 'react';
 import type { ChessPiece, PieceColor, PieceSymbol, Tutorial, BoardState } from '@/components/chess/types';
 import { Swords, Shield, Castle, VenetianMask, Brain, Users } from 'lucide-react';
 
@@ -48,10 +50,12 @@ export function createInitialBoard(): BoardState {
 
 export const INITIAL_FEN_STANDARD = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-// Simplified tutorial focusing on "how a pawn moves"
-const pawnTutorialBoard = createEmptyBoard();
-pawnTutorialBoard[6][4] = createPiece('P', 'white'); // White Pawn at e2
-pawnTutorialBoard[4][4] = createPiece('p', 'black'); // Black pawn at e4 for capture example (not used in simple version)
+// Define Icon Components
+const PawnIcon = (): JSX.Element => React.createElement('span', { className: "text-2xl" }, PIECE_UNICODE.white.P);
+
+const KnightIcon = (): JSX.Element => React.createElement('span', { className: "text-2xl" }, PIECE_UNICODE.white.N);
+
+const RookIcon = (): JSX.Element => React.createElement('span', { className: "text-2xl" }, PIECE_UNICODE.white.R);
 
 
 export const TUTORIALS_DATA: Tutorial[] = [
@@ -59,7 +63,7 @@ export const TUTORIALS_DATA: Tutorial[] = [
     slug: 'pawn-movement',
     title: 'The Pawn',
     description: 'Learn how pawns move forward and capture diagonally. Use AI to see optimal pawn moves.',
-    icon: () => <span className="text-2xl">{PIECE_UNICODE.white.P}</span>,
+    icon: PawnIcon,
     estimatedTime: '3 mins',
     difficulty: 'Beginner',
     initialBoard: (() => {
@@ -82,7 +86,7 @@ export const TUTORIALS_DATA: Tutorial[] = [
     slug: 'knight-movement',
     title: 'The Knight',
     description: 'Master the unique L-shaped movement of the knight. Let AI guide your knight.',
-    icon: () => <span className="text-2xl">{PIECE_UNICODE.white.N}</span>,
+    icon: KnightIcon,
     estimatedTime: '4 mins',
     difficulty: 'Beginner',
     initialBoard: (() => {
@@ -101,7 +105,7 @@ export const TUTORIALS_DATA: Tutorial[] = [
     slug: 'rook-movement',
     title: 'The Rook',
     description: 'Learn how rooks control ranks and files. See AI suggestions for rook positioning.',
-    icon: () => <span className="text-2xl">{PIECE_UNICODE.white.R}</span>,
+    icon: RookIcon,
     estimatedTime: '3 mins',
     difficulty: 'Beginner',
     initialBoard: (() => {
