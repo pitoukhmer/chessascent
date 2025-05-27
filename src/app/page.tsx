@@ -1,7 +1,8 @@
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowRight, BookOpenText, Cpu, Zap } from 'lucide-react';
+import { ArrowRight, BookOpenText, Cpu, Zap, PlayIcon } from 'lucide-react';
 import Image from 'next/image';
 
 export default function HomePage() {
@@ -20,7 +21,7 @@ export default function HomePage() {
           </Button>
           <Button size="lg" variant="outline" asChild>
             <Link href="/play">
-              Play vs AI <Cpu className="ml-2 h-5 w-5" />
+              Play Chess <PlayIcon className="ml-2 h-5 w-5" />
             </Link>
           </Button>
         </div>
@@ -46,15 +47,15 @@ export default function HomePage() {
         <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader>
             <div className="flex items-center space-x-3 mb-2">
-              <Cpu className="h-8 w-8 text-accent" />
-              <CardTitle className="text-2xl">Play Against AI</CardTitle>
+              <PlayIcon className="h-8 w-8 text-accent" />
+              <CardTitle className="text-2xl">Play Chess</CardTitle>
             </div>
-            <CardDescription>Challenge our AI opponent, suitable for various skill levels. Practice makes perfect!</CardDescription>
+            <CardDescription>Challenge an AI bot, or (soon) play online or with friends. Practice makes perfect!</CardDescription>
           </CardHeader>
           <CardContent>
-             <Image src="https://placehold.co/600x400.png" alt="Play AI" width={600} height={400} className="rounded-md object-cover" data-ai-hint="chess game" />
+             <Image src="https://placehold.co/600x400.png" alt="Play Chess" width={600} height={400} className="rounded-md object-cover" data-ai-hint="chess game board" />
             <Button variant="link" asChild className="mt-4 p-0 text-primary">
-              <Link href="/play">Start a Game <ArrowRight className="ml-1 h-4 w-4" /></Link>
+              <Link href="/play">Choose Game Mode <ArrowRight className="ml-1 h-4 w-4" /></Link>
             </Button>
           </CardContent>
         </Card>
