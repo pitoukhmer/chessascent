@@ -189,7 +189,7 @@ export default function PlayLocalPage() {
             onPieceDragStart={handlePieceDragStart}
             onSquareDrop={handleSquareDrop}
             isWhiteView={true} // Or could add a flip board button later
-            // currentPlayerColor={currentPlayer} // Pass current player to chessboard if needed for specific styling
+            currentPlayerColor={currentPlayer}
           />
            {showPromotionDialog && promotingSquare && promotionColor && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-md">
@@ -287,3 +287,4 @@ export default function PlayLocalPage() {
     </div>
   );
 }
+
