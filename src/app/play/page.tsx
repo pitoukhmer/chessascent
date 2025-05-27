@@ -29,7 +29,7 @@ export default function PlayPage() {
   const makeAiMove = () => {
     if (gameStatus !== 'ongoing') return;
 
-    const currentBoard = board.map(row => [...row]); 
+    const currentBoard = board.map(row => [...row]);
     let moved = false;
 
     // AI is black. Priority: 1. Pawn Capture, 2. Other Piece Adjacent Capture, 3. Pawn Push, 4. Random Other Piece Move
@@ -61,12 +61,12 @@ export default function PlayPage() {
         moved = true;
         setMoveHistory(prev => [...prev, `AI captures with ${captureToMake.piece.type} from (${captureToMake.r},${captureToMake.c}) to (${captureToMake.targetR},${captureToMake.targetC})`]);
         if (captureToMake.piece.type === 'P' && captureToMake.targetR === 7) {
-          currentBoard[captureToMake.targetR][captureToMake.targetC] = createPiece('Q', 'black'); 
+          currentBoard[captureToMake.targetR][captureToMake.targetC] = createPiece('Q', 'black');
           setMoveHistory(prev => [...prev, `AI promotes pawn to Q at (${captureToMake.targetR},${captureToMake.targetC})`]);
         }
       }
     }
-    
+
     // 2. Prioritize Other Piece Adjacent Captures (Simplified)
     if (!moved) {
       const otherPieceCaptures: { r: number, c: number, targetR: number, targetC: number, piece: ChessPiece }[] = [];
@@ -108,7 +108,7 @@ export default function PlayPage() {
             if (r + 1 < 8 && !currentBoard[r+1][c]) {
               pawnPushes.push({ r, c, targetR: r + 1, targetC: c, piece });
             }
-            if (r === 1 && !currentBoard[r+1][c] && !currentBoard[r+2][c]) { 
+            if (r === 1 && !currentBoard[r+1][c] && !currentBoard[r+2][c]) {
                  pawnPushes.push({ r, c, targetR: r + 2, targetC: c, piece });
             }
           }
@@ -121,12 +121,12 @@ export default function PlayPage() {
         moved = true;
         setMoveHistory(prev => [...prev, `AI moves ${pushToMake.piece.type} from (${pushToMake.r},${pushToMake.c}) to (${pushToMake.targetR},${pushToMake.targetC})`]);
         if (pushToMake.piece.type === 'P' && pushToMake.targetR === 7) {
-          currentBoard[pushToMake.targetR][pushToMake.targetC] = createPiece('Q', 'black'); 
+          currentBoard[pushToMake.targetR][pushToMake.targetC] = createPiece('Q', 'black');
           setMoveHistory(prev => [...prev, `AI promotes pawn to Q at (${pushToMake.targetR},${pushToMake.targetC})`]);
         }
       }
     }
-    
+
     // 4. Fall back to Random Adjacent Move (Non-Pawn to Empty Square)
     if (!moved) {
       const blackPieces: {piece: ChessPiece, r: number, c: number}[] = [];
@@ -167,15 +167,15 @@ export default function PlayPage() {
         setGameStatus('ai_win');
         setShowFeedbackButton(true);
       }
-      setIsPlayerTurn(true); 
+      setIsPlayerTurn(true);
     } else {
       let aiHasPieces = false;
       currentBoard.forEach(row => row.forEach(p => { if (p && p.color === 'black') aiHasPieces = true; }));
-      
+
       if (!aiHasPieces) { // AI has no pieces left
         setGameStatus('player_win');
       } else {  // AI has pieces but cannot move (stalemate from AI perspective)
-        setGameStatus('draw'); 
+        setGameStatus('draw');
       }
       setShowFeedbackButton(true);
       setIsPlayerTurn(true); // It should still be player's turn to see game over state or AI unable to move
@@ -187,86 +187,106 @@ export default function PlayPage() {
       event.preventDefault();
       return;
     }
-    event.dataTransfer.setData('application/json', JSON.stringify({ fromRow: fromCoord.row, fromCol: fromCoord.col }));
+    // Using 'text/plain' for broader compatibility and simplicity
+    event.dataTransfer.setData('text/plain', `${fromCoord.row},${fromCoord.col}`);
     event.dataTransfer.effectAllowed = 'move';
 
-    // Temporarily commented out custom drag image logic for debugging
+    // Temporarily commented out custom drag image logic for debugging / simplicity
     /*
-    const pieceRenderedElement = event.currentTarget.firstChild as HTMLElement; 
+    const pieceRenderedElement = event.currentTarget.firstChild as HTMLElement;
 
     if (pieceRenderedElement) {
       const clonedPieceElement = pieceRenderedElement.cloneNode(true) as HTMLElement;
-      
+
       clonedPieceElement.style.position = "absolute";
-      clonedPieceElement.style.left = "-9999px"; 
+      clonedPieceElement.style.left = "-9999px";
       clonedPieceElement.style.pointerEvents = "none";
-      clonedPieceElement.style.width = "48px"; 
-      clonedPieceElement.style.height = "48px"; 
+      clonedPieceElement.style.width = "48px"; // Explicit size
+      clonedPieceElement.style.height = "48px"; // Explicit size
       clonedPieceElement.style.display = "flex";
       clonedPieceElement.style.alignItems = "center";
       clonedPieceElement.style.justifyContent = "center";
-      clonedPieceElement.style.boxSizing = "border-box"; 
+      clonedPieceElement.style.boxSizing = "border-box";
 
       if (pieceRenderedElement.tagName.toLowerCase() === 'span' && pieceStyle === 'unicode') {
-         clonedPieceElement.style.fontSize = "40px"; 
+         clonedPieceElement.style.fontSize = "40px"; // Adjust if needed
          clonedPieceElement.style.lineHeight = "48px";
       }
-      
-      document.body.appendChild(clonedPieceElement); 
 
-      const rect = clonedPieceElement.getBoundingClientRect(); 
-      const offsetX = rect.width / 2;
-      const offsetY = rect.height / 2;
-      
-      event.dataTransfer.setDragImage(clonedPieceElement, offsetX, offsetY);
-      
-      setTimeout(() => {
-        if (document.body.contains(clonedPieceElement)) {
-            document.body.removeChild(clonedPieceElement);
+      document.body.appendChild(clonedPieceElement);
+
+      // Ensure the element is rendered before getting its bounding rect or using it for setDragImage
+      // A small timeout can help, though ideally, this should be handled by direct DOM manipulation if possible
+      requestAnimationFrame(() => {
+        try {
+            const rect = clonedPieceElement.getBoundingClientRect();
+            const offsetX = event.clientX - rect.left; // More accurate offset relative to mouse
+            const offsetY = event.clientY - rect.top;  // More accurate offset relative to mouse
+            // const offsetX = rect.width / 2; // Center of the piece
+            // const offsetY = rect.height / 2; // Center of the piece
+
+            event.dataTransfer.setDragImage(clonedPieceElement, offsetX, offsetY);
+        } catch (e) {
+            console.error("Error setting drag image:", e);
+        } finally {
+            // Clean up: remove the cloned element after a short delay
+            // The browser should have captured it by now
+            setTimeout(() => {
+                if (document.body.contains(clonedPieceElement)) {
+                    document.body.removeChild(clonedPieceElement);
+                }
+            }, 0);
         }
-      }, 0);
+      });
     }
     */
   };
 
   const handleSquareDrop = (event: React.DragEvent<HTMLButtonElement>, toCoord: SquareCoord) => {
-    event.preventDefault(); 
+    event.preventDefault();
     if (!isPlayerTurn || gameStatus !== 'ongoing' || showPromotionDialog) {
       return;
     }
 
-    const transferData = event.dataTransfer.getData('application/json');
+    const transferData = event.dataTransfer.getData('text/plain');
     if (!transferData) return;
 
-    const { fromRow, fromCol } = JSON.parse(transferData) as { fromRow: number; fromCol: number };
+    const [fromRowStr, fromColStr] = transferData.split(',');
+    if (!fromRowStr || !fromColStr) return; // Ensure data is valid
+
+    const fromRow = parseInt(fromRowStr, 10);
+    const fromCol = parseInt(fromColStr, 10);
+
+    if (isNaN(fromRow) || isNaN(fromCol)) return; // Ensure parsing was successful
+
     const fromCoord = { row: fromRow, col: fromCol };
 
     const pieceToMove = board[fromCoord.row][fromCoord.col];
 
     if (!pieceToMove || pieceToMove.color !== 'white') {
-      return; 
+      return;
     }
 
     if (fromCoord.row === toCoord.row && fromCoord.col === toCoord.col) {
-      return; 
+      return;
     }
 
     const newBoard = board.map(row => [...row]);
     const targetPieceOnBoard = newBoard[toCoord.row][toCoord.col];
 
     if (targetPieceOnBoard && targetPieceOnBoard.color === 'white') {
-      return; 
+      return;
     }
-    
+
     newBoard[toCoord.row][toCoord.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
     setBoard(newBoard);
     setMoveHistory(prev => [...prev, `Player moves ${pieceToMove.type} from (${fromCoord.row},${fromCoord.col}) to (${toCoord.row},${toCoord.col})`]);
-    
+
     if (targetPieceOnBoard && targetPieceOnBoard.type === 'K' && targetPieceOnBoard.color === 'black') {
         setGameStatus('player_win');
         setShowFeedbackButton(true);
-    } else if (pieceToMove.type === 'P' && toCoord.row === 0) { 
+    } else if (pieceToMove.type === 'P' && toCoord.row === 0) {
         setPromotingSquare(toCoord);
         setShowPromotionDialog(true);
     } else {
@@ -290,16 +310,16 @@ export default function PlayPage() {
     newBoard.forEach(row => row.forEach(p => {
         if (p && p.type === 'K' && p.color === 'black') aiKingFound = true;
     }));
-    if (!aiKingFound) { 
+    if (!aiKingFound) {
         setGameStatus('player_win');
         setShowFeedbackButton(true);
-        return; 
+        return;
     }
 
     setIsPlayerTurn(false);
     setTimeout(makeAiMove, 500);
   };
-  
+
   const resetGame = () => {
     setBoard(createInitialBoard());
     setIsPlayerTurn(true);
@@ -314,19 +334,19 @@ export default function PlayPage() {
     if(moveHistory.length === 0) return "1. e4 e5 *";
     return moveHistory
       .map((move, index) => {
-        const parts = move.split(' '); 
-        let notation = "??"; 
+        const parts = move.split(' ');
+        let notation = "??";
         if (parts.length > 4 && (parts.includes("moves") || parts.includes("captures"))) {
             const pieceType = parts.includes("with") ? parts[3] : parts[2];
-            const toSq = parts[parts.length -1]; 
-            const fromSq = parts[parts.length -3]; 
-            
+            const toSq = parts[parts.length -1];
+            const fromSq = parts[parts.length -3];
+
             const toColNotation = String.fromCharCode(97 + parseInt(toSq.substring(toSq.indexOf(',') + 1, toSq.indexOf(')'))));
             const toRowNotation = 8 - parseInt(toSq.substring(1, toSq.indexOf(',')));
             const fromColNotation = String.fromCharCode(97 + parseInt(fromSq.substring(fromSq.indexOf(',') + 1, fromSq.indexOf(')'))));
-            
+
             const action = move.toLowerCase().includes("capture") ? "x" : "";
-            
+
             if (pieceType === "P") {
                 notation = action ? `${fromColNotation}x${toColNotation}${toRowNotation}` : `${toColNotation}${toRowNotation}`;
             } else {
@@ -340,13 +360,13 @@ export default function PlayPage() {
             notation = `${toColNotation}${toRowNotation}=${promotedPiece}`;
         }
 
-        if(index % 2 === 0) return `${Math.floor(index/2) + 1}. ${notation}`; 
-        return `${notation}`; 
+        if(index % 2 === 0) return `${Math.floor(index/2) + 1}. ${notation}`;
+        return `${notation}`;
       })
       .reduce((acc, part, index) => {
         if(index === 0 && !part.startsWith("1.")) return `1. ${part}`;
-        if (index > 0 && part.match(/^\d+\./)) return `${acc} ${part}`; 
-        return `${acc}${part.startsWith(" ") ? "" : " "}${part}`; 
+        if (index > 0 && part.match(/^\d+\./)) return `${acc} ${part}`;
+        return `${acc}${part.startsWith(" ") ? "" : " "}${part}`;
       }, "").trim() + (gameStatus === 'player_win' ? " 1-0" : gameStatus === 'ai_win' ? " 0-1" : gameStatus === 'draw' ? " 1/2-1/2" : " *");
   };
 
@@ -361,15 +381,14 @@ export default function PlayPage() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-        <div className="md:col-span-2 relative"> 
-          <Chessboard 
-            boardState={board} 
+        <div className="md:col-span-2 relative">
+          <Chessboard
+            boardState={board}
             disabled={!isPlayerTurn || gameStatus !== 'ongoing' || showPromotionDialog}
             pieceStyle={pieceStyle}
             boardTheme={boardTheme}
             onPieceDragStart={handlePieceDragStart}
             onSquareDrop={handleSquareDrop}
-            isPlayerTurn={isPlayerTurn} // This prop isn't strictly used by Chessboard anymore but good for context
           />
            {showPromotionDialog && promotingSquare && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-md">
@@ -380,10 +399,10 @@ export default function PlayPage() {
                 </CardHeader>
                 <CardContent className="p-3 flex justify-center space-x-2">
                   {(['Q', 'R', 'B', 'N'] as PieceSymbol[]).map(pType => (
-                    <Button 
-                      key={pType} 
-                      onClick={() => handlePromotionChoice(pType)} 
-                      variant="outline" 
+                    <Button
+                      key={pType}
+                      onClick={() => handlePromotionChoice(pType)}
+                      variant="outline"
                       className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center hover:bg-accent focus:bg-accent"
                       aria-label={`Promote to ${pType}`}
                     >
@@ -403,7 +422,7 @@ export default function PlayPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="flex items-center">
-                <Info className="mr-2 h-5 w-5 text-blue-500" /> 
+                <Info className="mr-2 h-5 w-5 text-blue-500" />
                 Status: <span className="font-semibold ml-1 capitalize">{gameStatus.replace('_', ' ')}</span>
               </p>
               <p className="flex items-center">
@@ -452,11 +471,11 @@ export default function PlayPage() {
             </CardContent>
           </Card>
 
-          {gameStatus !== 'ongoing' && showFeedbackButton && ( 
-            <AiFeedbackSection 
+          {gameStatus !== 'ongoing' && showFeedbackButton && (
+            <AiFeedbackSection
               gameHistoryPgn={generateMockPgn()}
-              playerRating={1200} 
-              opponentRating={1150} 
+              playerRating={1200}
+              opponentRating={1150}
               userName="Player1"
             />
           )}
@@ -469,7 +488,7 @@ export default function PlayPage() {
           )}
         </div>
       </div>
-      
+
       {moveHistory.length > 0 && (
         <Card className="mt-8">
           <CardHeader><CardTitle>Move History (Simplified)</CardTitle></CardHeader>
@@ -483,4 +502,3 @@ export default function PlayPage() {
     </div>
   );
 }
-    
