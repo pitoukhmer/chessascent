@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Chessboard } from '@/components/chess/chessboard';
 import type { BoardState, SquareCoord, ChessPiece, PieceSymbol, PieceStyle, BoardTheme, PieceColor } from '@/components/chess/types';
 import { createInitialBoard, createPiece } from '@/lib/constants';
+import { isValidMove, getValidMovesForPiece } from '@/lib/chess-logic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { RotateCcw, Info, Check, Settings, Users } from 'lucide-react';
@@ -32,17 +33,15 @@ export default function PlayLocalPage() {
       event.preventDefault();
       return;
     }
-    // Simplified drag image (clone piece element)
     const pieceElement = event.currentTarget.firstChild?.cloneNode(true) as HTMLElement;
     if (pieceElement) {
         pieceElement.style.position = "absolute";
-        pieceElement.style.left = "-9999px"; // Position off-screen
-        pieceElement.style.width = "48px";
+        pieceElement.style.left = "-9999px";
+        pieceElement.style.width = "48px"; 
         pieceElement.style.height = "48px";
-        pieceElement.style.fontSize = "40px"; // Adjust if using unicode, might need other styling for SVG
+        pieceElement.style.fontSize = "40px"; 
         document.body.appendChild(pieceElement);
-        event.dataTransfer.setDragImage(pieceElement, 24, 24); // Center it
-        // Clean up the cloned element after a short delay
+        event.dataTransfer.setDragImage(pieceElement, 24, 24);
         setTimeout(() => {
             if (pieceElement.parentNode) {
                 pieceElement.parentNode.removeChild(pieceElement);
@@ -83,50 +82,74 @@ export default function PlayLocalPage() {
     }
 
     if (fromCoord.row === toCoord.row && fromCoord.col === toCoord.col) {
-      return; // Don't move to the same square
+      return; 
+    }
+    
+    if (!isValidMove(board, fromCoord, toCoord, currentPlayer)) {
+      toast({
+        title: "Invalid Move",
+        description: "This move is not allowed by the rules.",
+        variant: "destructive",
+        duration: 2000,
+      });
+      return;
     }
 
     const newBoard = board.map(row => [...row]);
     const targetPieceOnBoard = newBoard[toCoord.row][toCoord.col];
-
-    // Prevent capturing own pieces
-    if (targetPieceOnBoard && targetPieceOnBoard.color === currentPlayer) {
-      toast({ title: "Invalid Move", description: "Cannot capture your own piece.", variant: "destructive", duration: 2000 });
-      return;
-    }
-
-    // Basic move validation placeholder (actual chess rules are complex)
-    // For now, any move to an empty square or opponent's square is allowed for simplicity
     
     newBoard[toCoord.row][toCoord.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
     setBoard(newBoard);
-    setMoveHistory(prev => [...prev, `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} moves ${pieceToMove.type} from (${fromCoord.row},${fromCoord.col}) to (${toCoord.row},${toCoord.col})`]);
+    const moveDescription = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} moves ${pieceToMove.type} from (${String.fromCharCode(97 + fromCoord.col)}${8 - fromCoord.row}) to (${String.fromCharCode(97 + toCoord.col)}${8 - toCoord.row})`;
+    setMoveHistory(prev => [...prev, moveDescription]);
 
-    // Check for King capture
+
     if (targetPieceOnBoard && targetPieceOnBoard.type === 'K') {
       setGameStatus(currentPlayer === 'white' ? 'white_win' : 'black_win');
       toast({ title: "Game Over!", description: `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} wins by capturing the King!`, duration: 5000});
       return;
     }
 
-    // Check for Pawn Promotion
     if (pieceToMove.type === 'P') {
       if (currentPlayer === 'white' && toCoord.row === 0) {
         setPromotingSquare(toCoord);
         setPromotionColor('white');
         setShowPromotionDialog(true);
-        return; // Wait for promotion choice
+        return; 
       } else if (currentPlayer === 'black' && toCoord.row === 7) {
         setPromotingSquare(toCoord);
         setPromotionColor('black');
         setShowPromotionDialog(true);
-        return; // Wait for promotion choice
+        return; 
       }
     }
     
-    // Switch turn if game is still ongoing and no promotion dialog
-    setCurrentPlayer(currentPlayer === 'white' ? 'black' : 'white');
+    // Check for stalemate (simplified: no valid moves for next player)
+    const nextPlayerColor = currentPlayer === 'white' ? 'black' : 'white';
+    let hasValidMoves = false;
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = newBoard[r][c];
+        if (piece && piece.color === nextPlayerColor) {
+          if (getValidMovesForPiece(newBoard, {row: r, col: c}).length > 0) {
+            hasValidMoves = true;
+            break;
+          }
+        }
+      }
+      if (hasValidMoves) break;
+    }
+
+    if (!hasValidMoves) {
+        // More accurate check: is the current player's king in check? If not, it's stalemate. If yes, checkmate.
+        // For simplicity now, we'll call it a draw if no valid moves.
+        setGameStatus('draw');
+        toast({ title: "Game Over - Draw!", description: `No legal moves for ${nextPlayerColor}.`, duration: 5000});
+        return;
+    }
+    
+    setCurrentPlayer(nextPlayerColor);
   };
 
   const handlePromotionChoice = (promotionPieceType: PieceSymbol) => {
@@ -135,14 +158,11 @@ export default function PlayLocalPage() {
     const newBoard = board.map(row => [...row]);
     newBoard[promotingSquare.row][promotingSquare.col] = createPiece(promotionPieceType, promotionColor);
     setBoard(newBoard);
-    setMoveHistory(prev => [...prev, `${promotionColor.charAt(0).toUpperCase() + promotionColor.slice(1)} promotes pawn to ${promotionPieceType} at (${promotingSquare.row},${promotingSquare.col})`]);
+    setMoveHistory(prev => [...prev, `${promotionColor.charAt(0).toUpperCase() + promotionColor.slice(1)} promotes pawn to ${promotionPieceType} at (${String.fromCharCode(97+promotingSquare.col)}${8-promotingSquare.row})`]);
 
     setShowPromotionDialog(false);
-    setPromotingSquare(null);
-    setPromotionColor(null);
     
-    // Check if promotion itself captured a king (highly unlikely but for completeness)
-    let opponentKingFound = true; // Assume found unless proven otherwise
+    // Check for win/draw after promotion
     const opponentColor = promotionColor === 'white' ? 'black' : 'white';
     let kingFoundCheck = false;
     newBoard.forEach(row => row.forEach(p => {
@@ -151,11 +171,35 @@ export default function PlayLocalPage() {
     if (!kingFoundCheck) {
       setGameStatus(promotionColor === 'white' ? 'white_win' : 'black_win');
       toast({ title: "Game Over!", description: `${promotionColor.charAt(0).toUpperCase() + promotionColor.slice(1)} wins! (King missing after promotion)`, duration: 5000});
+      setPromotingSquare(null);
+      setPromotionColor(null);
       return;
     }
 
-    // Switch turn after promotion
-    setCurrentPlayer(promotionColor === 'white' ? 'black' : 'white');
+    let hasValidMoves = false;
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = newBoard[r][c];
+        if (piece && piece.color === opponentColor) {
+          if (getValidMovesForPiece(newBoard, {row: r, col: c}).length > 0) {
+            hasValidMoves = true;
+            break;
+          }
+        }
+      }
+      if (hasValidMoves) break;
+    }
+     if (!hasValidMoves) {
+        setGameStatus('draw');
+        toast({ title: "Game Over - Draw!", description: `No legal moves for ${opponentColor} after promotion.`, duration: 5000});
+        setPromotingSquare(null);
+        setPromotionColor(null);
+        return;
+    }
+    
+    setCurrentPlayer(opponentColor);
+    setPromotingSquare(null);
+    setPromotionColor(null);
   };
 
   const resetGame = () => {
@@ -175,7 +219,7 @@ export default function PlayLocalPage() {
           <Users className="mr-3 h-10 w-10" /> Local Multiplayer
         </h1>
         <p className="text-lg text-muted-foreground">
-          Two players, one board. Take turns making your moves.
+          Two players, one board. Take turns making your moves. Follows basic chess rules.
         </p>
       </header>
 
@@ -188,7 +232,7 @@ export default function PlayLocalPage() {
             boardTheme={boardTheme}
             onPieceDragStart={handlePieceDragStart}
             onSquareDrop={handleSquareDrop}
-            isWhiteView={true} // Or could add a flip board button later
+            isWhiteView={true} 
             currentPlayerColor={currentPlayer}
           />
            {showPromotionDialog && promotingSquare && promotionColor && (
@@ -224,12 +268,12 @@ export default function PlayLocalPage() {
             <CardContent className="space-y-3">
               <p className="flex items-center">
                 <Info className="mr-2 h-5 w-5 text-blue-500" />
-                Status: <span className="font-semibold ml-1 capitalize">{gameStatus.replace('_', ' ')}</span>
+                Status: <span className="font-semibold ml-1 capitalize">{gameStatus.replace('_win', ' Wins').replace('ongoing', 'Ongoing')}</span>
               </p>
               <p className="flex items-center">
                 <Check className="mr-2 h-5 w-5 text-green-500" />
                 Turn: <span className="font-semibold ml-1">
-                  {gameStatus === 'ongoing' ? (currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)) : 'Game Over'}
+                  {gameStatus === 'ongoing' ? (showPromotionDialog ? 'Promoting...' : (currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1))) : 'Game Over'}
                 </span>
               </p>
               <Button onClick={resetGame} variant="outline" className="w-full">
@@ -287,4 +331,3 @@ export default function PlayLocalPage() {
     </div>
   );
 }
-
