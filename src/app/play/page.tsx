@@ -190,22 +190,22 @@ export default function PlayPage() {
     event.dataTransfer.setData('text/plain', `${fromCoord.row},${fromCoord.col}`);
     event.dataTransfer.effectAllowed = 'move';
 
-    // Simple custom drag image
+    // Custom drag image logic TEMPORARILY REMOVED for diagnostics
+    /*
     const dragImage = document.createElement('span');
     dragImage.style.position = "absolute";
-    dragImage.style.left = "-9999px"; // Position off-screen
-    dragImage.style.fontSize = "40px"; // Adjust size as needed
+    dragImage.style.left = "-9999px"; 
+    dragImage.style.fontSize = "40px"; 
     dragImage.style.lineHeight = "1";
-    dragImage.innerText = piece.symbol; // Use Unicode symbol
+    dragImage.innerText = piece.symbol; 
     document.body.appendChild(dragImage);
-    // Center the drag image on the cursor
     event.dataTransfer.setDragImage(dragImage, dragImage.offsetWidth / 2, dragImage.offsetHeight / 2);
-    // Clean up the temporary element
     setTimeout(() => {
         if (document.body.contains(dragImage)) {
             document.body.removeChild(dragImage);
         }
     }, 0);
+    */
   };
 
   const handleSquareDrop = (event: React.DragEvent<HTMLButtonElement>, toCoord: SquareCoord) => {
@@ -244,14 +244,9 @@ export default function PlayPage() {
     const newBoard = board.map(row => [...row]);
     const targetPieceOnBoard = newBoard[toCoord.row][toCoord.col];
 
-    // Prevent capturing own piece
     if (targetPieceOnBoard && targetPieceOnBoard.color === 'white') {
       return;
     }
-
-    // Basic move validation (can be expanded later)
-    // For now, any move to an empty square or opponent's square is allowed for simplicity with D&D
-    // More complex validation (e.g., pawn moves, knight moves) would go here.
 
     newBoard[toCoord.row][toCoord.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
@@ -261,7 +256,7 @@ export default function PlayPage() {
     if (targetPieceOnBoard && targetPieceOnBoard.type === 'K' && targetPieceOnBoard.color === 'black') {
         setGameStatus('player_win');
         setShowFeedbackButton(true);
-    } else if (pieceToMove.type === 'P' && toCoord.row === 0) { // White pawn reaches row 0
+    } else if (pieceToMove.type === 'P' && toCoord.row === 0) { 
         setPromotingSquare(toCoord);
         setShowPromotionDialog(true);
     } else {
@@ -477,3 +472,4 @@ export default function PlayPage() {
     </div>
   );
 }
+
