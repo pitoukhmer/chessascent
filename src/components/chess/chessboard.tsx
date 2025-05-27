@@ -14,19 +14,18 @@ interface ChessboardProps {
   boardTheme?: BoardTheme;
   onPieceDragStart?: (event: React.DragEvent<HTMLButtonElement>, coord: SquareCoord, piece: ChessPiece) => void;
   onSquareDrop?: (event: React.DragEvent<HTMLButtonElement>, coord: SquareCoord) => void;
-  isPlayerTurn?: boolean; // Still useful for specific styling if needed, but 'disabled' is primary for interaction
+  // isPlayerTurn prop is not actively used internally beyond its influence on the 'disabled' prop from PlayPage
 }
 
 export function Chessboard({
   boardState,
   possibleMoves = [],
   isWhiteView = true,
-  disabled = false,
+  disabled = false, // This is the primary controller for enabling/disabling the board
   pieceStyle = 'unicode',
   boardTheme = 'default',
   onPieceDragStart,
   onSquareDrop,
-  isPlayerTurn = true, // Keep for potential styling, though 'disabled' gates interaction
 }: ChessboardProps) {
 
   const getSquareColors = (isDark: boolean): string => {
@@ -49,7 +48,6 @@ export function Chessboard({
     
     const isDark = (row + col) % 2 !== 0;    
     const isPossibleMove = possibleMoves.some(m => m.row === row && m.col === col);
-    // A piece is potentially a player's piece if it's white.
     const isPotentiallyPlayerPiece = !!piece && piece.color === 'white';
 
     return (
@@ -60,15 +58,11 @@ export function Chessboard({
           getSquareColors(isDark),
           isPossibleMove && !piece && 'bg-accent/30 hover:bg-accent/40', 
           isPossibleMove && piece && 'bg-destructive/30 hover:bg-destructive/40', 
-          // If board is disabled and it's a player's piece, show not-allowed cursor and reduced opacity.
-          // The 'disabled' prop on Chessboard (from PlayPage) handles turn logic primarily.
           (disabled && isPotentiallyPlayerPiece) && 'cursor-not-allowed opacity-60', 
-          (piece && piece.color === 'black') && 'cursor-not-allowed', // Black pieces are never player-draggable here
+          (piece && piece.color === 'black') && 'cursor-not-allowed',
         )}
         onClick={() => { /* Clicks are inert; interaction via D&D */ }}
         onDragStart={(e) => {
-          // Drag can only start if the board is not disabled, it's a player piece, and the handler exists.
-          // The 'disabled' prop on Chessboard is controlled by PlayPage and factors in isPlayerTurn.
           if (!disabled && isPotentiallyPlayerPiece && onPieceDragStart && piece) {
             onPieceDragStart(e, coord, piece);
           } else {
@@ -76,8 +70,9 @@ export function Chessboard({
           }
         }}
         onDragOver={(e) => {
-          if (!disabled) {
+          if (!disabled) { // Allow drop if the board is not disabled
             e.preventDefault(); 
+            e.dataTransfer.dropEffect = "move";
           }
         }}
         onDrop={(e) => {
@@ -86,8 +81,8 @@ export function Chessboard({
             onSquareDrop(e, coord);
           }
         }}
-        // HTML draggable attribute: true if it's a white piece and the board is not generally disabled.
         draggable={isPotentiallyPlayerPiece && !disabled}
+        disabled={disabled || (piece && piece.color === 'black')} // Explicitly disable button if board is disabled or it's a black piece
         aria-label={`Square ${String.fromCharCode(97 + col)}${8 - row}${piece ? `, ${piece.color} ${piece.type}` : ''}`}
       >
         <Piece piece={piece} pieceStyle={pieceStyle} />
