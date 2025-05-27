@@ -30,20 +30,19 @@ export default function PlayBotPage() {
   const { toast } = useToast();
 
   const makeAiMove = () => {
-    if (gameStatus !== 'ongoing') return;
+    if (gameStatus !== 'ongoing' || showPromotionDialog) return;
 
-    const currentBoard = board.map(row => [...row]);
+    const currentBoardForAIMove = board.map(row => [...row]); // Use the current board state
     const allLegalAiMoves: { from: SquareCoord, to: SquareCoord, piece: ChessPiece, isCapture: boolean }[] = [];
 
-    // Find all legal moves for AI (Black)
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
-        const piece = currentBoard[r][c];
+        const piece = currentBoardForAIMove[r][c];
         if (piece && piece.color === 'black') {
           const from = { row: r, col: c };
-          const legalMovesForThisPiece = getValidMovesForPiece(currentBoard, from);
+          const legalMovesForThisPiece = getValidMovesForPiece(currentBoardForAIMove, from);
           legalMovesForThisPiece.forEach(to => {
-            const targetPiece = currentBoard[to.row][to.col];
+            const targetPiece = currentBoardForAIMove[to.row][to.col];
             allLegalAiMoves.push({ from, to, piece, isCapture: !!(targetPiece && targetPiece.color === 'white') });
           });
         }
@@ -51,23 +50,14 @@ export default function PlayBotPage() {
     }
 
     if (allLegalAiMoves.length === 0) {
-      // No legal moves for AI - check if player's king is in check (checkmate) or not (stalemate)
-      // Simplified: For now, assume stalemate if AI has no moves.
       setGameStatus('draw');
       toast({ title: "Game Over - Draw!", description: "AI has no legal moves.", duration: 5000});
       setShowFeedbackButton(true);
-      setIsPlayerTurn(true); // Allow player to see final state or request feedback
+      setIsPlayerTurn(true); 
       return;
     }
 
-    // AI Move Selection Strategy:
-    // 1. Prioritize captures
-    // 2. Prioritize pawn promotions (to Queen)
-    // 3. Prioritize pawn pushes
-    // 4. Random legal move
-
     let moveToMake: { from: SquareCoord, to: SquareCoord, piece: ChessPiece } | null = null;
-
     const captureMoves = allLegalAiMoves.filter(move => move.isCapture);
     if (captureMoves.length > 0) {
       moveToMake = captureMoves[Math.floor(Math.random() * captureMoves.length)];
@@ -87,42 +77,40 @@ export default function PlayBotPage() {
     
     if (moveToMake) {
       const { from, to, piece } = moveToMake;
+      const newBoardAfterAIMove = currentBoardForAIMove.map(row => [...row]);
       let pieceToPlace = piece;
       let moveDescription = `AI moves ${piece.type} from (${String.fromCharCode(97 + from.col)}${8 - from.row}) to (${String.fromCharCode(97 + to.col)}${8 - to.row})`;
       
-      if (currentBoard[to.row][to.col]) { // It's a capture
+      if (newBoardAfterAIMove[to.row][to.col]) { 
          moveDescription = `AI captures with ${piece.type} from (${String.fromCharCode(97 + from.col)}${8 - from.row}) to (${String.fromCharCode(97 + to.col)}${8 - to.row})`;
       }
 
-      currentBoard[to.row][to.col] = null; // Clear target square first
-      currentBoard[from.row][from.col] = null;
+      newBoardAfterAIMove[to.row][to.col] = null; 
+      newBoardAfterAIMove[from.row][from.col] = null;
 
-      // Handle AI Pawn Promotion
       if (piece.type === 'P' && to.row === 7) {
-        pieceToPlace = createPiece('Q', 'black'); // AI always promotes to Queen
+        pieceToPlace = createPiece('Q', 'black'); 
         moveDescription += ` and promotes to Queen`;
       }
-      currentBoard[to.row][to.col] = pieceToPlace;
+      newBoardAfterAIMove[to.row][to.col] = pieceToPlace;
       
       setMoveHistory(prev => [...prev, moveDescription]);
-      setBoard(currentBoard);
+      setBoard(newBoardAfterAIMove);
 
-      // Check if player's King is captured
       let playerKingFound = false;
-      currentBoard.forEach(row => row.forEach(p => {
+      newBoardAfterAIMove.forEach(row => row.forEach(p => {
         if (p && p.type === 'K' && p.color === 'white') playerKingFound = true;
       }));
       if (!playerKingFound) {
         setGameStatus('ai_win');
         setShowFeedbackButton(true);
       } else {
-         // Check for stalemate or checkmate for the player
         let playerHasValidMoves = false;
         for (let r = 0; r < 8; r++) {
           for (let c = 0; c < 8; c++) {
-            const playerPiece = currentBoard[r][c];
+            const playerPiece = newBoardAfterAIMove[r][c];
             if (playerPiece && playerPiece.color === 'white') {
-              if (getValidMovesForPiece(currentBoard, {row: r, col: c}).length > 0) {
+              if (getValidMovesForPiece(newBoardAfterAIMove, {row: r, col: c}).length > 0) {
                 playerHasValidMoves = true;
                 break;
               }
@@ -131,7 +119,7 @@ export default function PlayBotPage() {
           if (playerHasValidMoves) break;
         }
         if (!playerHasValidMoves) {
-            setGameStatus('draw'); // Simplified: stalemate
+            setGameStatus('draw'); 
             toast({ title: "Game Over - Draw!", description: "Player has no legal moves.", duration: 5000});
             setShowFeedbackButton(true);
         }
@@ -139,27 +127,38 @@ export default function PlayBotPage() {
       setIsPlayerTurn(true);
     }
   };
+  
+  useEffect(() => {
+    if (!isPlayerTurn && gameStatus === 'ongoing' && !showPromotionDialog) {
+      const timer = setTimeout(() => {
+        makeAiMove();
+      }, 500); // Delay AI move for visual pacing
+      return () => clearTimeout(timer); // Cleanup timer on component unmount or if dependencies change
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlayerTurn, gameStatus, board, showPromotionDialog]); // `board` is a crucial dependency here
 
   const handlePieceDragStart = (event: React.DragEvent<HTMLButtonElement>, fromCoord: SquareCoord, piece: ChessPiece) => {
     if (piece.color !== 'white' || !isPlayerTurn || gameStatus !== 'ongoing' || showPromotionDialog) {
       event.preventDefault();
       return;
     }
-    const pieceElement = event.currentTarget.firstChild?.cloneNode(true) as HTMLElement;
-    if (pieceElement) {
-        pieceElement.style.position = "absolute";
-        pieceElement.style.left = "-9999px";
-        pieceElement.style.width = "48px"; 
-        pieceElement.style.height = "48px";
-        pieceElement.style.fontSize = "40px";
-        document.body.appendChild(pieceElement);
-        event.dataTransfer.setDragImage(pieceElement, 24, 24);
-        setTimeout(() => {
-            if (pieceElement.parentNode) {
-                pieceElement.parentNode.removeChild(pieceElement);
-            }
-        }, 0);
-    }
+    // Temporarily removed custom drag image logic for stability
+    // const pieceElement = event.currentTarget.firstChild?.cloneNode(true) as HTMLElement;
+    // if (pieceElement) {
+    //     pieceElement.style.position = "absolute";
+    //     pieceElement.style.left = "-9999px";
+    //     pieceElement.style.width = "48px"; 
+    //     pieceElement.style.height = "48px";
+    //     pieceElement.style.fontSize = "40px";
+    //     document.body.appendChild(pieceElement);
+    //     event.dataTransfer.setDragImage(pieceElement, 24, 24);
+    //     setTimeout(() => {
+    //         if (pieceElement.parentNode) {
+    //             pieceElement.parentNode.removeChild(pieceElement);
+    //         }
+    //     }, 0);
+    // }
     event.dataTransfer.setData('text/plain', `${fromCoord.row},${fromCoord.col}`);
     event.dataTransfer.effectAllowed = 'move';
   };
@@ -172,7 +171,7 @@ export default function PlayBotPage() {
 
     const transferData = event.dataTransfer.getData('text/plain');
     if (!transferData || !transferData.includes(',')) {
-        console.error("Invalid transfer data:", transferData);
+        console.error("Invalid transfer data in handleSquareDrop:", transferData);
         return;
     }
 
@@ -181,7 +180,7 @@ export default function PlayBotPage() {
     const fromCol = parseInt(fromColStr, 10);
 
     if (isNaN(fromRow) || isNaN(fromCol) || fromRow < 0 || fromRow > 7 || fromCol < 0 || fromCol > 7) {
-      console.error("Parsed invalid fromCoords:", fromRow, fromCol);
+      console.error("Parsed invalid fromCoords in handleSquareDrop:", {fromRow, fromCol});
       return;
     }
 
@@ -189,7 +188,7 @@ export default function PlayBotPage() {
     const pieceToMove = board[fromCoord.row][fromCoord.col];
 
     if (!pieceToMove || pieceToMove.color !== 'white') {
-      console.error("No white piece found at source or piece is not white:", fromCoord, pieceToMove);
+      console.error("No white piece found at source or piece is not white in handleSquareDrop:", {fromCoord, pieceToMove});
       return;
     }
 
@@ -212,7 +211,7 @@ export default function PlayBotPage() {
     
     newBoard[toCoord.row][toCoord.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
-    setBoard(newBoard);
+    setBoard(newBoard); // Player's move is applied
     const moveDescription = `Player moves ${pieceToMove.type} from (${String.fromCharCode(97 + fromCoord.col)}${8 - fromCoord.row}) to (${String.fromCharCode(97 + toCoord.col)}${8 - toCoord.row})`;
     setMoveHistory(prev => [...prev, moveDescription]);
 
@@ -224,9 +223,10 @@ export default function PlayBotPage() {
     } else if (pieceToMove.type === 'P' && toCoord.row === 0) { 
         setPromotingSquare(toCoord);
         setShowPromotionDialog(true);
+        // setIsPlayerTurn is NOT set to false here; player needs to promote first.
+        // The useEffect will not trigger AI move because showPromotionDialog is true.
     } else {
-        setIsPlayerTurn(false);
-        setTimeout(makeAiMove, 500);
+        setIsPlayerTurn(false); // AI's turn now, useEffect will trigger makeAiMove
     }
   };
 
@@ -235,7 +235,7 @@ export default function PlayBotPage() {
 
     const newBoard = board.map(row => [...row]);
     newBoard[promotingSquare.row][promotingSquare.col] = createPiece(promotionPieceType, 'white');
-    setBoard(newBoard);
+    setBoard(newBoard); // Board updated with promoted piece
     setMoveHistory(prev => [...prev, `Player promotes pawn to ${promotionPieceType} at (${String.fromCharCode(97+promotingSquare.col)}${8-promotingSquare.row})`]);
 
     setShowPromotionDialog(false);
@@ -245,15 +245,15 @@ export default function PlayBotPage() {
     newBoard.forEach(row => row.forEach(p => {
         if (p && p.type === 'K' && p.color === 'black') aiKingFound = true;
     }));
-    if (!aiKingFound) { // Highly unlikely if promotion leads to king capture, but check
+    if (!aiKingFound) { 
         setGameStatus('player_win');
         setShowFeedbackButton(true);
         toast({ title: "Game Over!", description: "You win! (AI King missing after promotion)", duration: 5000});
         return;
     }
-
-    setIsPlayerTurn(false);
-    setTimeout(makeAiMove, 500);
+    
+    // After promotion, it becomes AI's turn
+    setIsPlayerTurn(false); // useEffect will trigger makeAiMove
   };
 
   const resetGame = () => {
@@ -267,16 +267,12 @@ export default function PlayBotPage() {
   };
 
   const generateMockPgn = () => {
-    // This function is simplified and doesn't produce fully compliant PGN.
-    // It's more for the AI feedback than for standard PGN export.
-    if(moveHistory.length === 0) return "1. e4 e5 *"; // Default example
+    if(moveHistory.length === 0) return "1. e4 e5 *"; 
     
     let pgn = "";
     let moveCount = 1;
     moveHistory.forEach((move, index) => {
         let simpleNotation = "??"; 
-        // Example: "Player moves P from (e2) to (e4)"
-        // Example: "AI captures with N from (g8) to (f6)"
         const parts = move.split(' ');
         if (parts.length >= 6) {
             const pieceType = parts.includes("with") ? parts[3] : parts[2];
@@ -290,15 +286,14 @@ export default function PlayBotPage() {
                 simpleNotation = `${pieceType}${action}${toSqAlgebraic}`;
             }
             if (move.toLowerCase().includes("promotes to")) {
-                const promotedPiece = parts[parts.length -1]; // "Queen"
-                simpleNotation += `=${promotedPiece.charAt(0).toUpperCase()}`;
+                const promotedPieceToken = parts[parts.length -1]; 
+                simpleNotation += `=${promotedPieceToken.charAt(0).toUpperCase()}`;
             }
         }
 
-
-        if(index % 2 === 0) { // Player's move (White)
+        if(index % 2 === 0) { 
             pgn += `${moveCount}. ${simpleNotation} `;
-        } else { // AI's move (Black)
+        } else { 
             pgn += `${simpleNotation} `;
             moveCount++;
         }
@@ -307,7 +302,7 @@ export default function PlayBotPage() {
     if (gameStatus === 'player_win') pgn += "1-0";
     else if (gameStatus === 'ai_win') pgn += "0-1";
     else if (gameStatus === 'draw') pgn += "1/2-1/2";
-    else pgn += "*"; // Game ongoing or other result
+    else pgn += "*"; 
 
     return pgn.trim();
   };
@@ -417,12 +412,11 @@ export default function PlayBotPage() {
           {gameStatus !== 'ongoing' && showFeedbackButton && (
             <AiFeedbackSection
               gameHistoryPgn={generateMockPgn()}
-              playerRating={1200} // Example rating
-              opponentRating={1150} // Example rating
+              playerRating={1200} 
+              opponentRating={1150} 
               userName="Player"
             />
           )}
-           {/* Placeholder for future mid-game feedback - currently not implemented */}
         </div>
       </div>
 
@@ -439,3 +433,4 @@ export default function PlayBotPage() {
     </div>
   );
 }
+
