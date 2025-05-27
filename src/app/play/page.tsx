@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Bot, Zap, Handshake, ArrowRight } from 'lucide-react';
+import { Bot, Zap, Handshake, ArrowRight, Users } from 'lucide-react'; // Added Users icon
 import { useToast } from '@/hooks/use-toast';
 
 export default function PlayOptionsPage() {
@@ -45,6 +45,23 @@ export default function PlayOptionsPage() {
           </CardContent>
         </Card>
 
+        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col rounded-lg overflow-hidden">
+          <CardHeader className="bg-secondary/30 p-6">
+            <div className="flex items-center space-x-3 mb-2">
+              <Users className="h-10 w-10 text-accent" /> {/* Changed Icon */}
+              <CardTitle className="text-2xl">Play a Friend (Local)</CardTitle>
+            </div>
+            <CardDescription>Play against a friend on the same device. Pass and play!</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6 flex-grow flex flex-col justify-end">
+            <Button asChild className="w-full mt-auto">
+              <Link href="/play/local">
+                Start Local Game <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+
         <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col rounded-lg overflow-hidden bg-card/60 opacity-70">
           <CardHeader className="bg-secondary/20 p-6">
             <div className="flex items-center space-x-3 mb-2">
@@ -56,21 +73,6 @@ export default function PlayOptionsPage() {
           <CardContent className="p-6 flex-grow flex flex-col justify-end">
             <Button onClick={handleComingSoon} className="w-full mt-auto" variant="outline" disabled>
               Find Match <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col rounded-lg overflow-hidden bg-card/60 opacity-70">
-          <CardHeader className="bg-secondary/20 p-6">
-            <div className="flex items-center space-x-3 mb-2">
-              <Handshake className="h-10 w-10 text-muted-foreground" />
-              <CardTitle className="text-2xl text-muted-foreground/80">Play a Friend</CardTitle>
-            </div>
-            <CardDescription className="text-muted-foreground/90">Invite a friend to a game of chess. (Coming Soon)</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6 flex-grow flex flex-col justify-end">
-            <Button onClick={handleComingSoon} className="w-full mt-auto" variant="outline" disabled>
-              Invite Friend <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </CardContent>
         </Card>
