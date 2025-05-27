@@ -169,17 +169,16 @@ export default function PlayPage() {
       }
       setIsPlayerTurn(true); 
     } else {
-      // AI could not make a move
       let aiHasPieces = false;
       currentBoard.forEach(row => row.forEach(p => { if (p && p.color === 'black') aiHasPieces = true; }));
       
-      if (!aiHasPieces) { // AI has no pieces left
+      if (!aiHasPieces) {
         setGameStatus('player_win');
-      } else { // AI has pieces but cannot move (stalemate from AI's perspective, or checkmated by player)
-        setGameStatus('draw'); // Simplified: treat as draw. Full checkmate/stalemate is complex.
+      } else { 
+        setGameStatus('draw'); 
       }
       setShowFeedbackButton(true);
-      setIsPlayerTurn(true); // Still set player's turn so they see the final board/status
+      setIsPlayerTurn(true);
     }
   };
 
@@ -191,41 +190,38 @@ export default function PlayPage() {
     event.dataTransfer.setData('application/json', JSON.stringify({ fromRow: fromCoord.row, fromCol: fromCoord.col }));
     event.dataTransfer.effectAllowed = 'move';
 
-    const squareButton = event.currentTarget;
-    const pieceRenderedElement = squareButton.firstChild as HTMLElement; 
+    const pieceRenderedElement = event.currentTarget.firstChild as HTMLElement; 
 
     if (pieceRenderedElement) {
       const clonedPieceElement = pieceRenderedElement.cloneNode(true) as HTMLElement;
-      // Basic styling for the cloned drag image
-      clonedPieceElement.style.position = "absolute";
-      clonedPieceElement.style.left = "-9999px"; // Position off-screen before adding to DOM
-      clonedPieceElement.style.pointerEvents = "none"; // Ensure it doesn't interfere with drag events
       
-      // Ensure consistent sizing for the drag image relative to the piece's visual style
-      // These values might need tweaking based on how Piece.tsx styles its content
-      const pieceSpan = pieceRenderedElement; // pieceRenderedElement is already the span from Piece.tsx
-      if (pieceSpan) {
-          const computedStyle = window.getComputedStyle(pieceSpan);
-          clonedPieceElement.style.fontSize = computedStyle.fontSize;
-          clonedPieceElement.style.fontFamily = computedStyle.fontFamily;
-          clonedPieceElement.style.lineHeight = computedStyle.lineHeight;
-          clonedPieceElement.style.width = computedStyle.width === 'auto' || computedStyle.width === '0px' ? '40px' : computedStyle.width; // Approx. for text
-          clonedPieceElement.style.height = computedStyle.height === 'auto' || computedStyle.height === '0px' ? '40px' : computedStyle.height; // Approx. for text
-          clonedPieceElement.style.display = 'flex';
-          clonedPieceElement.style.alignItems = 'center';
-          clonedPieceElement.style.justifyContent = 'center';
+      // Style the cloned element for the drag image
+      clonedPieceElement.style.position = "absolute";
+      clonedPieceElement.style.left = "-9999px"; // Position off-screen
+      clonedPieceElement.style.pointerEvents = "none";
+      clonedPieceElement.style.width = "48px"; // Explicit size for drag image
+      clonedPieceElement.style.height = "48px"; // Explicit size for drag image
+      clonedPieceElement.style.display = "flex";
+      clonedPieceElement.style.alignItems = "center";
+      clonedPieceElement.style.justifyContent = "center";
+      clonedPieceElement.style.boxSizing = "border-box"; // Important for consistent sizing
 
-          // For SVG children, try to get their size
-          const svgChild = pieceSpan.querySelector('svg');
-          if (svgChild) {
-            clonedPieceElement.style.width = svgChild.getAttribute('width') || '40px';
-            clonedPieceElement.style.height = svgChild.getAttribute('height') || '40px';
-          }
+      // If it's a text piece, ensure font size is explicitly set on the clone
+      // This is to match the visual size of text-4xl/text-5xl used in Piece.tsx for Unicode
+      if (pieceRenderedElement.tagName.toLowerCase() === 'span' && pieceStyle === 'unicode') {
+         clonedPieceElement.style.fontSize = "40px"; // Adjust if text-5xl is 3rem (48px) then a bit smaller
+         clonedPieceElement.style.lineHeight = "48px";
+      } else if (pieceRenderedElement.tagName.toLowerCase() === 'span' && pieceStyle === 'graphical') {
+        // For graphical, the inner SVG already has relative sizing (80%).
+        // We need to ensure the span container for SVG is sized, and SVG scales within.
+        // The 48px on clonedPieceElement should handle the container.
+        // The SVG inside should scale to 80% of this 48px.
       }
       
       document.body.appendChild(clonedPieceElement); 
 
-      const rect = clonedPieceElement.getBoundingClientRect();
+      // Center the drag image on the cursor
+      const rect = clonedPieceElement.getBoundingClientRect(); // Get dimensions after applying styles
       const offsetX = rect.width / 2;
       const offsetY = rect.height / 2;
       
@@ -240,7 +236,7 @@ export default function PlayPage() {
   };
 
   const handleSquareDrop = (event: React.DragEvent<HTMLButtonElement>, toCoord: SquareCoord) => {
-    event.preventDefault(); // Important for drop to work correctly
+    event.preventDefault(); 
     if (!isPlayerTurn || gameStatus !== 'ongoing' || showPromotionDialog) {
       return;
     }
@@ -300,7 +296,7 @@ export default function PlayPage() {
     newBoard.forEach(row => row.forEach(p => {
         if (p && p.type === 'K' && p.color === 'black') aiKingFound = true;
     }));
-    if (!aiKingFound) { // Should not happen if game ends on King capture, but good check
+    if (!aiKingFound) { 
         setGameStatus('player_win');
         setShowFeedbackButton(true);
         return; 
