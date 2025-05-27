@@ -72,8 +72,9 @@ export function Chessboard({
           }
         }}
         onDragOver={(e) => {
-          if (!disabled && onSquareDrop) {
-            e.preventDefault(); 
+          // Corrected: Only check if the board is not disabled for dropping
+          if (!disabled) {
+            e.preventDefault(); // Indicate this is a valid drop target
           }
         }}
         onDrop={(e) => {
