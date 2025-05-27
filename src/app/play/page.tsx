@@ -178,7 +178,7 @@ export default function PlayPage() {
         setGameStatus('draw');
       }
       setShowFeedbackButton(true);
-      setIsPlayerTurn(true); // It should still be player's turn to see game over state or AI unable to move
+      setIsPlayerTurn(true); 
     }
   };
 
@@ -187,59 +187,25 @@ export default function PlayPage() {
       event.preventDefault();
       return;
     }
-    // Using 'text/plain' for broader compatibility and simplicity
     event.dataTransfer.setData('text/plain', `${fromCoord.row},${fromCoord.col}`);
     event.dataTransfer.effectAllowed = 'move';
 
-    // Temporarily commented out custom drag image logic for debugging / simplicity
-    /*
-    const pieceRenderedElement = event.currentTarget.firstChild as HTMLElement;
-
-    if (pieceRenderedElement) {
-      const clonedPieceElement = pieceRenderedElement.cloneNode(true) as HTMLElement;
-
-      clonedPieceElement.style.position = "absolute";
-      clonedPieceElement.style.left = "-9999px";
-      clonedPieceElement.style.pointerEvents = "none";
-      clonedPieceElement.style.width = "48px"; // Explicit size
-      clonedPieceElement.style.height = "48px"; // Explicit size
-      clonedPieceElement.style.display = "flex";
-      clonedPieceElement.style.alignItems = "center";
-      clonedPieceElement.style.justifyContent = "center";
-      clonedPieceElement.style.boxSizing = "border-box";
-
-      if (pieceRenderedElement.tagName.toLowerCase() === 'span' && pieceStyle === 'unicode') {
-         clonedPieceElement.style.fontSize = "40px"; // Adjust if needed
-         clonedPieceElement.style.lineHeight = "48px";
-      }
-
-      document.body.appendChild(clonedPieceElement);
-
-      // Ensure the element is rendered before getting its bounding rect or using it for setDragImage
-      // A small timeout can help, though ideally, this should be handled by direct DOM manipulation if possible
-      requestAnimationFrame(() => {
-        try {
-            const rect = clonedPieceElement.getBoundingClientRect();
-            const offsetX = event.clientX - rect.left; // More accurate offset relative to mouse
-            const offsetY = event.clientY - rect.top;  // More accurate offset relative to mouse
-            // const offsetX = rect.width / 2; // Center of the piece
-            // const offsetY = rect.height / 2; // Center of the piece
-
-            event.dataTransfer.setDragImage(clonedPieceElement, offsetX, offsetY);
-        } catch (e) {
-            console.error("Error setting drag image:", e);
-        } finally {
-            // Clean up: remove the cloned element after a short delay
-            // The browser should have captured it by now
-            setTimeout(() => {
-                if (document.body.contains(clonedPieceElement)) {
-                    document.body.removeChild(clonedPieceElement);
-                }
-            }, 0);
+    // Simple custom drag image
+    const dragImage = document.createElement('span');
+    dragImage.style.position = "absolute";
+    dragImage.style.left = "-9999px"; // Position off-screen
+    dragImage.style.fontSize = "40px"; // Adjust size as needed
+    dragImage.style.lineHeight = "1";
+    dragImage.innerText = piece.symbol; // Use Unicode symbol
+    document.body.appendChild(dragImage);
+    // Center the drag image on the cursor
+    event.dataTransfer.setDragImage(dragImage, dragImage.offsetWidth / 2, dragImage.offsetHeight / 2);
+    // Clean up the temporary element
+    setTimeout(() => {
+        if (document.body.contains(dragImage)) {
+            document.body.removeChild(dragImage);
         }
-      });
-    }
-    */
+    }, 0);
   };
 
   const handleSquareDrop = (event: React.DragEvent<HTMLButtonElement>, toCoord: SquareCoord) => {
@@ -249,34 +215,43 @@ export default function PlayPage() {
     }
 
     const transferData = event.dataTransfer.getData('text/plain');
-    if (!transferData) return;
+    if (!transferData || !transferData.includes(',')) {
+        console.error("Invalid transfer data:", transferData);
+        return;
+    }
 
     const [fromRowStr, fromColStr] = transferData.split(',');
-    if (!fromRowStr || !fromColStr) return; // Ensure data is valid
-
     const fromRow = parseInt(fromRowStr, 10);
     const fromCol = parseInt(fromColStr, 10);
 
-    if (isNaN(fromRow) || isNaN(fromCol)) return; // Ensure parsing was successful
+    if (isNaN(fromRow) || isNaN(fromCol) || fromRow < 0 || fromRow > 7 || fromCol < 0 || fromCol > 7) {
+      console.error("Parsed invalid fromCoords:", fromRow, fromCol);
+      return;
+    }
 
     const fromCoord = { row: fromRow, col: fromCol };
-
     const pieceToMove = board[fromCoord.row][fromCoord.col];
 
     if (!pieceToMove || pieceToMove.color !== 'white') {
+      console.error("No white piece found at source or piece is not white:", fromCoord, pieceToMove);
       return;
     }
 
     if (fromCoord.row === toCoord.row && fromCoord.col === toCoord.col) {
-      return;
+      return; // Don't move to the same square
     }
 
     const newBoard = board.map(row => [...row]);
     const targetPieceOnBoard = newBoard[toCoord.row][toCoord.col];
 
+    // Prevent capturing own piece
     if (targetPieceOnBoard && targetPieceOnBoard.color === 'white') {
       return;
     }
+
+    // Basic move validation (can be expanded later)
+    // For now, any move to an empty square or opponent's square is allowed for simplicity with D&D
+    // More complex validation (e.g., pawn moves, knight moves) would go here.
 
     newBoard[toCoord.row][toCoord.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
@@ -286,7 +261,7 @@ export default function PlayPage() {
     if (targetPieceOnBoard && targetPieceOnBoard.type === 'K' && targetPieceOnBoard.color === 'black') {
         setGameStatus('player_win');
         setShowFeedbackButton(true);
-    } else if (pieceToMove.type === 'P' && toCoord.row === 0) {
+    } else if (pieceToMove.type === 'P' && toCoord.row === 0) { // White pawn reaches row 0
         setPromotingSquare(toCoord);
         setShowPromotionDialog(true);
     } else {
