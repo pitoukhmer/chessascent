@@ -56,4 +56,5 @@ export interface ChessboardProps {
   isWhiteView?: boolean; // For potential board flipping, not fully used yet beyond orientation
   lastMove?: { from: SquareCoord, to: SquareCoord } | null;
   highlightedMoves?: SquareCoord[];
+  kingInCheckCoord?: SquareCoord | null; // Coordinate of the king currently in check
 }

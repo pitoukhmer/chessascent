@@ -6,10 +6,10 @@ import { Chessboard } from '@/components/chess/chessboard';
 import { AiFeedbackSection } from '@/components/ai/ai-feedback-section';
 import type { BoardState, SquareCoord, ChessPiece, PieceSymbol, PieceStyle, BoardTheme, PieceColor } from '@/components/chess/types';
 import { createInitialBoard, createPiece } from '@/lib/constants';
-import { isValidMove, getValidMovesForPiece } from '@/lib/chess-logic';
+import { isValidMove, getValidMovesForPiece, isKingInCheck, findKing } from '@/lib/chess-logic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { RotateCcw, Info, Check, Settings, TimerIcon, Play, CpuIcon, BarChart3 } from 'lucide-react';
+import { RotateCcw, Info, Check, Settings, TimerIcon, Play, CpuIcon, BarChart3, AlertTriangleIcon } from 'lucide-react';
 import { Piece } from '@/components/chess/piece';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -53,16 +53,36 @@ export default function PlayBotPage() {
 
   const [lastMove, setLastMove] = useState<{ from: SquareCoord, to: SquareCoord } | null>(null);
   const [highlightedMoves, setHighlightedMoves] = useState<SquareCoord[]>([]);
+  const [kingInCheckCoord, setKingInCheckCoord] = useState<SquareCoord | null>(null);
 
-  // New state for game settings, timers, and phase
   const [gamePhase, setGamePhase] = useState<GamePhase>('setup');
-  const [selectedTimeControl, setSelectedTimeControl] = useState<number>(TIME_CONTROLS[2].value); // Default 5 mins
-  const [aiDifficulty, setAiDifficulty] = useState<DifficultyLevel>(AI_DIFFICULTY_LEVELS[0]); // Default Beginner
+  const [selectedTimeControl, setSelectedTimeControl] = useState<number>(TIME_CONTROLS[2].value); 
+  const [aiDifficulty, setAiDifficulty] = useState<DifficultyLevel>(AI_DIFFICULTY_LEVELS[0]);
   const [whiteTime, setWhiteTime] = useState<number>(selectedTimeControl);
   const [blackTime, setBlackTime] = useState<number>(selectedTimeControl);
   const [activeTimer, setActiveTimer] = useState<'white' | 'black' | null>(null);
   const [winner, setWinner] = useState<Winner>(null);
   const [endReason, setEndReason] = useState<string>('');
+  const [checkMessage, setCheckMessage] = useState<string>('');
+
+  const updateCheckStatus = useCallback((currentBoard: BoardState) => {
+    const whiteKingPos = findKing(currentBoard, 'white');
+    const blackKingPos = findKing(currentBoard, 'black');
+    let newCheckMessage = '';
+    let newKingInCheckCoord: SquareCoord | null = null;
+
+    if (whiteKingPos && isKingInCheck(currentBoard, 'white')) {
+      newCheckMessage = "White is in Check!";
+      newKingInCheckCoord = whiteKingPos;
+      toast({ title: "Check!", description: "Your King (White) is in check!", variant: "destructive", duration: 3000 });
+    } else if (blackKingPos && isKingInCheck(currentBoard, 'black')) {
+      newCheckMessage = "Black is in Check!";
+      newKingInCheckCoord = blackKingPos;
+       toast({ title: "Check!", description: "AI King (Black) is in check!", duration: 3000 });
+    }
+    setCheckMessage(newCheckMessage);
+    setKingInCheckCoord(newKingInCheckCoord);
+  }, [toast]);
 
 
   const makeAiMove = useCallback(() => {
@@ -78,8 +98,14 @@ export default function PlayBotPage() {
           const from = { row: r, col: c };
           const legalMovesForThisPiece = getValidMovesForPiece(currentBoardForAIMove, from);
           legalMovesForThisPiece.forEach(to => {
-            const targetPiece = currentBoardForAIMove[to.row][to.col];
-            allLegalAiMoves.push({ from, to, piece, isCapture: !!(targetPiece && targetPiece.color === 'white') });
+            // Simulate move to check if it leaves AI king in check
+            const tempBoard = currentBoardForAIMove.map(row => row.slice());
+            tempBoard[to.row][to.col] = piece;
+            tempBoard[from.row][from.col] = null;
+            if (!isKingInCheck(tempBoard, 'black')) {
+              const targetPiece = currentBoardForAIMove[to.row][to.col];
+              allLegalAiMoves.push({ from, to, piece, isCapture: !!(targetPiece && targetPiece.color === 'white') });
+            }
           });
         }
       }
@@ -87,9 +113,16 @@ export default function PlayBotPage() {
 
     if (allLegalAiMoves.length === 0) {
       setGamePhase('ended');
-      setWinner('draw'); // Correctly set to draw if AI has no moves
-      setEndReason("Stalemate! AI has no legal moves.");
-      toast({ title: "Game Over - Draw!", description: "AI has no legal moves.", duration: 5000 });
+      // check if player's king is in check for checkmate, otherwise stalemate
+      if (isKingInCheck(currentBoardForAIMove, 'white')) {
+        setWinner('black');
+        setEndReason("Checkmate! AI wins.");
+        toast({ title: "Game Over - Checkmate!", description: "AI wins!", duration: 5000 });
+      } else {
+        setWinner('draw'); 
+        setEndReason("Stalemate! AI has no legal moves.");
+        toast({ title: "Game Over - Draw!", description: "AI has no legal moves.", duration: 5000 });
+      }
       setShowFeedbackButton(true);
       setActiveTimer(null);
       return;
@@ -97,9 +130,9 @@ export default function PlayBotPage() {
 
     let moveToMake: { from: SquareCoord, to: SquareCoord, piece: ChessPiece } | null = null;
     const captureMoves = allLegalAiMoves.filter(move => move.isCapture);
-    const promotingMoves = allLegalAiMoves.filter(m => m.piece.type === 'P' && m.to.row === 7); // AI promotes on row 7 (its perspective)
+    const promotingMoves = allLegalAiMoves.filter(m => m.piece.type === 'P' && m.to.row === 7);
     
-    const pieceValues: Record<PieceSymbol, number> = { 'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 0 }; // King value not used for capture scoring
+    const pieceValues: Record<PieceSymbol, number> = { 'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 0 };
 
     if (aiDifficulty === 'Beginner') {
       if (captureMoves.length > 0) moveToMake = captureMoves[Math.floor(Math.random() * captureMoves.length)];
@@ -114,24 +147,21 @@ export default function PlayBotPage() {
         captureMoves.sort((a, b) => {
           const pieceAVal = currentBoardForAIMove[a.to.row][a.to.col] ? pieceValues[currentBoardForAIMove[a.to.row][a.to.col]!.type] : 0;
           const pieceBVal = currentBoardForAIMove[b.to.row][b.to.col] ? pieceValues[currentBoardForAIMove[b.to.row][b.to.col]!.type] : 0;
-          return pieceBVal - pieceAVal; // Higher value target first
+          return pieceBVal - pieceAVal;
         });
         moveToMake = captureMoves[0];
       } else if (promotingMoves.length > 0) {
         moveToMake = promotingMoves[Math.floor(Math.random() * promotingMoves.length)];
       } else {
-        const knightMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'N');
-        const bishopMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'B');
-        const rookMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'R');
-        const queenMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'Q');
-        const pawnMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'P');
-
-        if (knightMoves.length > 0) moveToMake = knightMoves[Math.floor(Math.random() * knightMoves.length)];
-        else if (bishopMoves.length > 0) moveToMake = bishopMoves[Math.floor(Math.random() * bishopMoves.length)];
-        else if (rookMoves.length > 0) moveToMake = rookMoves[Math.floor(Math.random() * rookMoves.length)];
-        else if (queenMoves.length > 0) moveToMake = queenMoves[Math.floor(Math.random() * queenMoves.length)];
-        else if (pawnMoves.length > 0) moveToMake = pawnMoves[Math.floor(Math.random() * pawnMoves.length)];
-        else if (allLegalAiMoves.length > 0) moveToMake = allLegalAiMoves[Math.floor(Math.random() * allLegalAiMoves.length)];
+        const priorityOrder: PieceSymbol[] = ['N', 'B', 'R', 'Q', 'P', 'K'];
+        for (const pType of priorityOrder) {
+            const movesOfType = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === pType);
+            if (movesOfType.length > 0) {
+                moveToMake = movesOfType[Math.floor(Math.random() * movesOfType.length)];
+                break;
+            }
+        }
+        if (!moveToMake && allLegalAiMoves.length > 0) moveToMake = allLegalAiMoves[Math.floor(Math.random() * allLegalAiMoves.length)];
       }
     } else { // Advanced
       if (captureMoves.length > 0) {
@@ -140,34 +170,26 @@ export default function PlayBotPage() {
           const targetB = currentBoardForAIMove[b.to.row][b.to.col];
           const pieceAVal = targetA ? pieceValues[targetA.type] : 0;
           const pieceBVal = targetB ? pieceValues[targetB.type] : 0;
-          
-          if (pieceBVal !== pieceAVal) {
-            return pieceBVal - pieceAVal; // Higher value target first
-          }
-          // If capturing same value target, prefer using a less valuable attacker
+          if (pieceBVal !== pieceAVal) return pieceBVal - pieceAVal;
           const attackerAVal = pieceValues[a.piece.type];
           const attackerBVal = pieceValues[b.piece.type];
-          return attackerAVal - attackerBVal; // Lower value attacker first
+          return attackerAVal - attackerBVal;
         });
         moveToMake = captureMoves[0];
       } else if (promotingMoves.length > 0) {
-        moveToMake = promotingMoves[Math.floor(Math.random() * promotingMoves.length)]; // Promote to Queen by default later
+        moveToMake = promotingMoves[Math.floor(Math.random() * promotingMoves.length)]; 
       } else {
-        const queenMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'Q');
-        const rookMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'R');
-        const knightMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'N');
-        const bishopMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'B');
-        const pawnMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'P');
-
-        if (queenMoves.length > 0) moveToMake = queenMoves[Math.floor(Math.random() * queenMoves.length)];
-        else if (rookMoves.length > 0) moveToMake = rookMoves[Math.floor(Math.random() * rookMoves.length)];
-        else if (knightMoves.length > 0) moveToMake = knightMoves[Math.floor(Math.random() * knightMoves.length)];
-        else if (bishopMoves.length > 0) moveToMake = bishopMoves[Math.floor(Math.random() * bishopMoves.length)];
-        else if (pawnMoves.length > 0) moveToMake = pawnMoves[Math.floor(Math.random() * pawnMoves.length)];
-        else if (allLegalAiMoves.length > 0) moveToMake = allLegalAiMoves[Math.floor(Math.random() * allLegalAiMoves.length)];
+        const priorityOrder: PieceSymbol[] = ['Q', 'R', 'N', 'B', 'P', 'K'];
+         for (const pType of priorityOrder) {
+            const movesOfType = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === pType);
+            if (movesOfType.length > 0) {
+                moveToMake = movesOfType[Math.floor(Math.random() * movesOfType.length)];
+                break;
+            }
+        }
+        if (!moveToMake && allLegalAiMoves.length > 0) moveToMake = allLegalAiMoves[Math.floor(Math.random() * allLegalAiMoves.length)];
       }
     }
-
 
     if (moveToMake) {
       const { from, to, piece } = moveToMake;
@@ -176,13 +198,13 @@ export default function PlayBotPage() {
       let moveDescription = `AI moves ${piece.type} from (${String.fromCharCode(97 + from.col)}${8 - from.row}) to (${String.fromCharCode(97 + to.col)}${8 - to.row})`;
 
       if (newBoardAfterAIMove[to.row][to.col]) {
-        moveDescription = `AI captures with ${piece.type} from (${String.fromCharCode(97 + from.col)}${8 - from.row}) to (${String.fromCharCode(97 + to.col)}${8 - to.row})`;
+        moveDescription = `AI captures with ${piece.type} from (${String.fromCharCode(97 + from.col)}${8 - from.row}) on (${String.fromCharCode(97 + to.col)}${8 - to.row})`;
       }
 
-      newBoardAfterAIMove[to.row][to.col] = null; // Clear target square first
+      newBoardAfterAIMove[to.row][to.col] = null; 
       newBoardAfterAIMove[from.row][from.col] = null; 
 
-      if (piece.type === 'P' && to.row === 7) { // AI is black, promotes on row 7
+      if (piece.type === 'P' && to.row === 7) { 
         pieceToPlace = createPiece('Q', 'black');
         moveDescription += ` and promotes to Queen`;
       }
@@ -191,6 +213,7 @@ export default function PlayBotPage() {
       setLastMove({ from, to });
       setMoveHistory(prev => [...prev, moveDescription]);
       setBoard(newBoardAfterAIMove);
+      updateCheckStatus(newBoardAfterAIMove);
 
       let playerKingFound = false;
       newBoardAfterAIMove.forEach(row => row.forEach(p => {
@@ -210,19 +233,32 @@ export default function PlayBotPage() {
           for (let c = 0; c < 8; c++) {
             const playerPiece = newBoardAfterAIMove[r][c];
             if (playerPiece && playerPiece.color === 'white') {
-              if (getValidMovesForPiece(newBoardAfterAIMove, { row: r, col: c }).length > 0) {
-                playerHasValidMoves = true;
-                break;
+              const validPlayerMoves = getValidMovesForPiece(newBoardAfterAIMove, { row: r, col: c });
+              for (const move of validPlayerMoves) {
+                  const tempBoardForPlayer = newBoardAfterAIMove.map(row => row.slice());
+                  tempBoardForPlayer[move.row][move.col] = playerPiece;
+                  tempBoardForPlayer[r][c] = null;
+                  if (!isKingInCheck(tempBoardForPlayer, 'white')) {
+                      playerHasValidMoves = true;
+                      break;
+                  }
               }
             }
+            if (playerHasValidMoves) break;
           }
           if (playerHasValidMoves) break;
         }
         if (!playerHasValidMoves) {
           setGamePhase('ended');
-          setWinner('draw');
-          setEndReason("Stalemate! Player has no legal moves.");
-          toast({ title: "Game Over - Draw!", description: "Player has no legal moves.", duration: 5000 });
+          if (isKingInCheck(newBoardAfterAIMove, 'white')) {
+            setWinner('black');
+            setEndReason("Checkmate! AI wins.");
+            toast({ title: "Game Over - Checkmate!", description: "AI wins as player has no legal moves out of check.", duration: 5000 });
+          } else {
+            setWinner('draw');
+            setEndReason("Stalemate! Player has no legal moves.");
+            toast({ title: "Game Over - Draw!", description: "Player has no legal moves.", duration: 5000 });
+          }
           setShowFeedbackButton(true);
           setActiveTimer(null);
         } else {
@@ -232,7 +268,7 @@ export default function PlayBotPage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, gamePhase, showPromotionDialog, aiDifficulty, isPlayerTurn, toast]); // Removed board from here to avoid potential infinite loops if AI logic relies on it too directly before player turn state changes
+  }, [board, gamePhase, showPromotionDialog, aiDifficulty, isPlayerTurn, toast, updateCheckStatus]); 
 
   useEffect(() => {
     if (gamePhase !== 'playing') {
@@ -243,10 +279,10 @@ export default function PlayBotPage() {
     if (!isPlayerTurn && !showPromotionDialog) {
       const timer = setTimeout(() => {
         makeAiMove();
-      }, 700); // AI "thinking" time
+      }, 700); 
       return () => clearTimeout(timer);
     }
-  }, [isPlayerTurn, gamePhase, board, showPromotionDialog, makeAiMove]); // `board` is a dependency for `makeAiMove`
+  }, [isPlayerTurn, gamePhase, board, showPromotionDialog, makeAiMove]); 
 
   useEffect(() => {
     if (gamePhase !== 'playing' || !activeTimer) {
@@ -286,7 +322,6 @@ export default function PlayBotPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTimer, gamePhase, whiteTime, blackTime, toast]);
 
 
@@ -295,27 +330,16 @@ export default function PlayBotPage() {
       event.preventDefault();
       return;
     }
-    // Custom drag image logic (simplified - can be expanded)
-    // const pieceElement = event.currentTarget.firstChild?.cloneNode(true) as HTMLElement;
-    // if (pieceElement) {
-    //     // Basic styling for the drag image
-    //     pieceElement.style.position = "absolute";
-    //     pieceElement.style.left = "-9999px"; // Keep it off-screen
-    //     pieceElement.style.width = "48px"; // Or your desired piece size
-    //     pieceElement.style.height = "48px";
-    //     pieceElement.style.fontSize = "40px"; // Adjust if using text-based pieces
-    //     document.body.appendChild(pieceElement);
-    //     event.dataTransfer.setDragImage(pieceElement, 24, 24); // Center the image
-    //     setTimeout(() => { // Cleanup
-    //         if (pieceElement.parentNode) {
-    //             pieceElement.parentNode.removeChild(pieceElement);
-    //         }
-    //     }, 0);
-    // }
+    
     event.dataTransfer.setData('text/plain', `${fromCoord.row},${fromCoord.col}`);
     event.dataTransfer.effectAllowed = 'move';
 
-    const validMoves = getValidMovesForPiece(board, fromCoord);
+    const validMoves = getValidMovesForPiece(board, fromCoord).filter(to => {
+        const tempBoard = board.map(r => r.slice());
+        tempBoard[to.row][to.col] = piece;
+        tempBoard[fromCoord.row][fromCoord.col] = null;
+        return !isKingInCheck(tempBoard, 'white');
+    });
     setHighlightedMoves(validMoves);
   };
 
@@ -357,12 +381,17 @@ export default function PlayBotPage() {
       return;
     }
 
-    if (!isValidMove(board, fromCoord, toCoord, 'white')) {
+    // Simulate move to check if it leaves player's king in check
+    const tempBoardForCheck = board.map(r => r.slice());
+    tempBoardForCheck[toCoord.row][toCoord.col] = pieceToMove;
+    tempBoardForCheck[fromCoord.row][fromCoord.col] = null;
+
+    if (!isValidMove(board, fromCoord, toCoord, 'white') || isKingInCheck(tempBoardForCheck, 'white')) {
       toast({
         title: "Invalid Move",
-        description: "This move is not allowed by the rules.",
+        description: "This move is not allowed or would leave your King in check.",
         variant: "destructive",
-        duration: 2000,
+        duration: 3000,
       });
       return;
     }
@@ -374,7 +403,9 @@ export default function PlayBotPage() {
     newBoard[fromCoord.row][fromCoord.col] = null;
     setBoard(newBoard);
     setLastMove({ from: fromCoord, to: toCoord });
-    const moveDescription = `Player moves ${pieceToMove.type} from (${String.fromCharCode(97 + fromCoord.col)}${8 - fromCoord.row}) to (${String.fromCharCode(97 + toCoord.col)}${8 - toCoord.row})`;
+    updateCheckStatus(newBoard);
+    const capturedPieceSymbol = targetPieceOnBoard ? ` ${targetPieceOnBoard.type}` : "";
+    const moveDescription = `Player moves ${pieceToMove.type} from (${String.fromCharCode(97 + fromCoord.col)}${8 - fromRow}) to (${String.fromCharCode(97 + toCoord.col)}${8 - toCoord.row})${capturedPieceSymbol ? " capturing" + capturedPieceSymbol : ""}`;
     setMoveHistory(prev => [...prev, moveDescription]);
 
 
@@ -385,10 +416,10 @@ export default function PlayBotPage() {
       toast({ title: "Game Over!", description: "You captured the AI's King!", duration: 5000 });
       setShowFeedbackButton(true);
       setActiveTimer(null);
-    } else if (pieceToMove.type === 'P' && toCoord.row === 0) { // Player is white, promotes on row 0
+    } else if (pieceToMove.type === 'P' && toCoord.row === 0) { 
       setPromotingSquare(toCoord);
       setShowPromotionDialog(true);
-      setActiveTimer(null); // Pause timer during promotion
+      setActiveTimer(null); 
     } else {
       setIsPlayerTurn(false);
       setActiveTimer('black');
@@ -402,6 +433,7 @@ export default function PlayBotPage() {
     newBoard[promotingSquare.row][promotingSquare.col] = createPiece(promotionPieceType, 'white');
     setBoard(newBoard);
     setMoveHistory(prev => [...prev, `Player promotes pawn to ${promotionPieceType} at (${String.fromCharCode(97 + promotingSquare.col)}${8 - promotingSquare.row})`]);
+    updateCheckStatus(newBoard);
 
     setShowPromotionDialog(false);
     setPromotingSquare(null);
@@ -419,6 +451,45 @@ export default function PlayBotPage() {
       setActiveTimer(null);
       return;
     }
+    
+    // Check if AI is checkmated or stalemated after promotion
+    let aiHasValidMoves = false;
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const aiPiece = newBoard[r][c];
+            if (aiPiece && aiPiece.color === 'black') {
+                const validAiMoves = getValidMovesForPiece(newBoard, {row: r, col: c});
+                for (const move of validAiMoves) {
+                    const tempBoardForAi = newBoard.map(row => row.slice());
+                    tempBoardForAi[move.row][move.col] = aiPiece;
+                    tempBoardForAi[r][c] = null;
+                    if (!isKingInCheck(tempBoardForAi, 'black')) {
+                        aiHasValidMoves = true;
+                        break;
+                    }
+                }
+            }
+            if (aiHasValidMoves) break;
+        }
+        if (aiHasValidMoves) break;
+    }
+
+    if (!aiHasValidMoves) {
+        setGamePhase('ended');
+        if (isKingInCheck(newBoard, 'black')) {
+            setWinner('white');
+            setEndReason("Checkmate! Player wins.");
+            toast({ title: "Game Over - Checkmate!", description: "Player wins after AI has no legal moves out of check.", duration: 5000 });
+        } else {
+            setWinner('draw');
+            setEndReason("Stalemate! AI has no legal moves.");
+            toast({ title: "Game Over - Draw!", description: "AI has no legal moves after player promotion.", duration: 5000 });
+        }
+        setShowFeedbackButton(true);
+        setActiveTimer(null);
+        return;
+    }
+
 
     setIsPlayerTurn(false);
     setActiveTimer('black');
@@ -433,17 +504,19 @@ export default function PlayBotPage() {
     setPromotingSquare(null);
     setLastMove(null);
     setHighlightedMoves([]);
+    setKingInCheckCoord(null);
+    setCheckMessage('');
     setWhiteTime(selectedTimeControl);
     setBlackTime(selectedTimeControl);
     setActiveTimer('white');
     setWinner(null);
     setEndReason('');
     setGamePhase('playing');
+    updateCheckStatus(createInitialBoard());
   };
 
   const resetGame = () => {
     setGamePhase('setup');
-    // Reset board for visual consistency in setup, keep selected time/difficulty
     setBoard(createInitialBoard()); 
     setIsPlayerTurn(true);
     setMoveHistory([]);
@@ -452,64 +525,67 @@ export default function PlayBotPage() {
     setPromotingSquare(null);
     setLastMove(null);
     setHighlightedMoves([]);
-    setWhiteTime(selectedTimeControl); // Reflects current selection for next game
-    setBlackTime(selectedTimeControl); // Reflects current selection for next game
+    setKingInCheckCoord(null);
+    setCheckMessage('');
+    setWhiteTime(selectedTimeControl);
+    setBlackTime(selectedTimeControl); 
     setActiveTimer(null);
     setWinner(null);
     setEndReason('');
   };
 
   const generateMockPgn = () => {
-    if (moveHistory.length === 0) return "1. e4 e5 *"; // Default placeholder
+    if (moveHistory.length === 0) return "1. e4 e5 *"; 
 
     let pgn = "";
     let moveCount = 1;
     moveHistory.forEach((move, index) => {
-      let simpleNotation = "??"; // Default for unparsed moves
-      const parts = move.split(' '); // e.g. "Player moves P from (d2) to (d4)"
-      // Attempt to parse the move string for PGN
+      let simpleNotation = "??"; 
+      const parts = move.split(' '); 
       if (parts.length >= 6) {
-          const pieceType = parts.includes("with") ? parts[3] : parts[2]; // "P", "N", etc.
-          const toSqAlgebraic = parts[parts.length - 1].replace(/[()]/g, ''); // "d4"
-          const fromSqAlgebraic = parts[parts.length - 3].replace(/[()]/g, ''); // "d2"
+          const pieceType = parts.includes("with") ? parts[3] : parts[2]; 
+          const toSqAlgebraic = parts[parts.length - (move.includes("capturing") ? 3 : 1)].replace(/[()]/g, '');
+          const fromSqAlgebraic = parts[parts.length - (move.includes("capturing") ? 5 : 3)].replace(/[()]/g, '');
           const action = move.toLowerCase().includes("capture") ? "x" : "";
 
-          if (pieceType === "P") { // Pawn moves are just the destination square, or file + x + square for captures
+          if (pieceType === "P") { 
             simpleNotation = action ? `${fromSqAlgebraic.charAt(0)}x${toSqAlgebraic}` : toSqAlgebraic;
           } else {
             simpleNotation = `${pieceType}${action}${toSqAlgebraic}`;
           }
-          // Append promotion, e.g. e8=Q
+          
           if (move.toLowerCase().includes("promotes to")) {
-            const promotedPieceToken = parts[parts.length - 1]; // This part of the parsing might be fragile. Assumes last word is piece type.
-                                                              // Example: "Player promotes pawn to Q at (e8)" - Need to grab 'Q'
-                                                              // A better way: if "promotes to X", X is the piece.
             const promotionParts = move.split(' ');
             const promotionIndex = promotionParts.indexOf("to");
             if (promotionIndex !== -1 && promotionIndex + 1 < promotionParts.length) {
                  simpleNotation = toSqAlgebraic + `=${promotionParts[promotionIndex+1].charAt(0).toUpperCase()}`;
             }
           }
+           // Add '+' for check if applicable, '#' for checkmate will be harder here
+          const tempBoard = board; // This is a simplification, PGN needs board state at time of move
+          if (index % 2 === 0 && isKingInCheck(tempBoard, 'black')) simpleNotation += '+';
+          if (index % 2 !== 0 && isKingInCheck(tempBoard, 'white')) simpleNotation += '+';
+
       }
       
-      if (index % 2 === 0) { // White's move
+      if (index % 2 === 0) { 
         pgn += `${moveCount}. ${simpleNotation} `;
-      } else { // Black's move
+      } else { 
         pgn += `${simpleNotation} `;
         moveCount++;
       }
     });
 
-    // Append game result
     if (winner === 'white') pgn += "1-0";
     else if (winner === 'black') pgn += "0-1";
     else if (winner === 'draw') pgn += "1/2-1/2";
-    else pgn += "*"; // Game in progress or aborted
+    else pgn += "*"; 
 
     return pgn.trim();
   };
   
   const getGameStatusMessage = () => {
+    if (checkMessage) return checkMessage;
     if (gamePhase === 'playing') {
       return isPlayerTurn ? (showPromotionDialog ? 'Promoting...' : 'Your Turn (White)') : "AI's Turn (Black)";
     }
@@ -519,7 +595,7 @@ export default function PlayBotPage() {
       if (winner === 'draw') return `Draw! ${endReason}`;
       return 'Game Over';
     }
-    return 'Setup Game'; // Initial state
+    return 'Setup Game'; 
   };
 
 
@@ -583,9 +659,10 @@ export default function PlayBotPage() {
                 onPieceDragStart={handlePieceDragStart}
                 onSquareDrop={handleSquareDrop}
                 onDragEndCapture={handleDragEnd}
-                currentPlayerColor={'white'} // Player is always white vs bot
+                currentPlayerColor={'white'} 
                 lastMove={lastMove}
                 highlightedMoves={highlightedMoves}
+                kingInCheckCoord={kingInCheckCoord}
               />
               {showPromotionDialog && promotingSquare && (
                 <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-10 rounded-md">
@@ -622,6 +699,11 @@ export default function PlayBotPage() {
                      <span className={cn("font-semibold", activeTimer === 'white' && isPlayerTurn && "text-primary animate-pulse")}>You: {formatTime(whiteTime)}</span>
                      <span className={cn("font-semibold", activeTimer === 'black' && !isPlayerTurn && "text-primary animate-pulse")}>AI: {formatTime(blackTime)}</span>
                   </div>
+                   {checkMessage && (
+                    <p className="flex items-center text-destructive font-semibold">
+                      <AlertTriangleIcon className="mr-2 h-4 w-4 shrink-0" /> {checkMessage}
+                    </p>
+                  )}
                   <p className="flex items-center">
                     <Info className="mr-2 h-4 w-4 text-blue-500 shrink-0" />
                     <span className="font-medium mr-1">Status:</span> <span className="text-muted-foreground">{getGameStatusMessage()}</span>
@@ -679,8 +761,8 @@ export default function PlayBotPage() {
               {gamePhase === 'ended' && showFeedbackButton && winner !== null && (
                 <AiFeedbackSection
                   gameHistoryPgn={generateMockPgn()}
-                  playerRating={1200} // Mock rating
-                  opponentRating={aiDifficulty === 'Beginner' ? 1000 : aiDifficulty === 'Medium' ? 1300 : 1600} // Mock AI rating
+                  playerRating={1200} 
+                  opponentRating={aiDifficulty === 'Beginner' ? 1000 : aiDifficulty === 'Medium' ? 1300 : 1600} 
                   userName="Player"
                 />
               )}
@@ -702,4 +784,3 @@ export default function PlayBotPage() {
     </div>
   );
 }
-

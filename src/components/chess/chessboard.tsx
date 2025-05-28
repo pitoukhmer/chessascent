@@ -17,6 +17,7 @@ export function Chessboard({
   currentPlayerColor,
   lastMove,
   highlightedMoves = [],
+  kingInCheckCoord,
 }: ChessboardProps) {
 
   const getSquareColors = (isDark: boolean): string => {
@@ -54,9 +55,12 @@ export function Chessboard({
     const isLastMoveFrom = lastMove && lastMove.from.row === row && lastMove.from.col === col;
     const isLastMoveTo = lastMove && lastMove.to.row === row && lastMove.to.col === col;
     const isHighlightedAsPossibleMove = highlightedMoves.some(m => m.row === row && m.col === col);
+    const isKingSquareInCheck = kingInCheckCoord && kingInCheckCoord.row === row && kingInCheckCoord.col === col;
 
     let highlightClass = '';
-    if (isLastMoveFrom || isLastMoveTo) {
+    if (isKingSquareInCheck) {
+      highlightClass = 'bg-red-500/70 dark:bg-red-700/70 ring-2 ring-red-600 animate-pulse';
+    } else if (isLastMoveFrom || isLastMoveTo) {
       highlightClass = 'bg-yellow-400/60 dark:bg-yellow-600/60 ring-1 ring-yellow-500';
     } else if (isHighlightedAsPossibleMove) {
       const targetPiece = boardState[row][col];
@@ -102,7 +106,7 @@ export function Chessboard({
           }
         }}
         draggable={isDraggable}
-        disabled={disabled && !isDraggable} // Button is disabled if board is disabled AND it's not a draggable piece
+        disabled={disabled && !isDraggable && (!piece || piece.color === 'black' && currentPlayerColor === 'white')}
         aria-label={`Square ${String.fromCharCode(97 + col)}${8 - row}${piece ? `, ${piece.color} ${piece.type}` : ''}`}
       >
         <Piece piece={piece} pieceStyle={pieceStyle} />

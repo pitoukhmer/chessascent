@@ -1,14 +1,14 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Chessboard } from '@/components/chess/chessboard';
 import type { BoardState, SquareCoord, ChessPiece, PieceSymbol, PieceStyle, BoardTheme, PieceColor } from '@/components/chess/types';
 import { createInitialBoard, createPiece } from '@/lib/constants';
-import { isValidMove, getValidMovesForPiece } from '@/lib/chess-logic';
+import { isValidMove, getValidMovesForPiece, isKingInCheck, findKing } from '@/lib/chess-logic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { RotateCcw, Info, Check, Settings, Users } from 'lucide-react';
+import { RotateCcw, Info, Check, Settings, Users, AlertTriangleIcon } from 'lucide-react';
 import { Piece } from '@/components/chess/piece';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -30,30 +30,44 @@ export default function PlayLocalPage() {
 
   const [lastMove, setLastMove] = useState<{ from: SquareCoord, to: SquareCoord } | null>(null);
   const [highlightedMoves, setHighlightedMoves] = useState<SquareCoord[]>([]);
+  const [kingInCheckCoord, setKingInCheckCoord] = useState<SquareCoord | null>(null);
+  const [checkMessage, setCheckMessage] = useState<string>('');
+
+
+  const updateCheckStatus = useCallback((currentBoard: BoardState, playerWhoseTurnItIs: PieceColor) => {
+    const kingPos = findKing(currentBoard, playerWhoseTurnItIs);
+    let newCheckMessage = '';
+    let newKingInCheckCoord: SquareCoord | null = null;
+
+    if (kingPos && isKingInCheck(currentBoard, playerWhoseTurnItIs)) {
+      newCheckMessage = `${playerWhoseTurnItIs.charAt(0).toUpperCase() + playerWhoseTurnItIs.slice(1)} is in Check!`;
+      newKingInCheckCoord = kingPos;
+      toast({ title: "Check!", description: `${playerWhoseTurnItIs.charAt(0).toUpperCase() + playerWhoseTurnItIs.slice(1)}'s King is in check!`, variant: "destructive", duration: 3000 });
+    }
+    setCheckMessage(newCheckMessage);
+    setKingInCheckCoord(newKingInCheckCoord);
+  }, [toast]);
+
+  useEffect(() => {
+    // Initial check status on game start/reset
+    updateCheckStatus(board, currentPlayer);
+  }, [board, currentPlayer, updateCheckStatus]);
+
 
   const handlePieceDragStart = (event: React.DragEvent<HTMLButtonElement>, fromCoord: SquareCoord, piece: ChessPiece) => {
     if (piece.color !== currentPlayer || gameStatus !== 'ongoing' || showPromotionDialog) {
       event.preventDefault();
       return;
     }
-    // const pieceElement = event.currentTarget.firstChild?.cloneNode(true) as HTMLElement;
-    // if (pieceElement) {
-    //     pieceElement.style.position = "absolute";
-    //     pieceElement.style.left = "-9999px";
-    //     pieceElement.style.width = "48px"; 
-    //     pieceElement.style.height = "48px";
-    //     pieceElement.style.fontSize = "40px"; 
-    //     document.body.appendChild(pieceElement);
-    //     event.dataTransfer.setDragImage(pieceElement, 24, 24);
-    //     setTimeout(() => {
-    //         if (pieceElement.parentNode) {
-    //             pieceElement.parentNode.removeChild(pieceElement);
-    //         }
-    //     }, 0);
-    // }
     event.dataTransfer.setData('text/plain', `${fromCoord.row},${fromCoord.col}`);
     event.dataTransfer.effectAllowed = 'move';
-    const validMoves = getValidMovesForPiece(board, fromCoord);
+
+    const validMoves = getValidMovesForPiece(board, fromCoord).filter(to => {
+        const tempBoard = board.map(r => r.slice());
+        tempBoard[to.row][to.col] = piece;
+        tempBoard[fromCoord.row][fromCoord.col] = null;
+        return !isKingInCheck(tempBoard, piece.color); // Prevent moves into self-check
+    });
     setHighlightedMoves(validMoves);
   };
 
@@ -95,12 +109,16 @@ export default function PlayLocalPage() {
       return; 
     }
     
-    if (!isValidMove(board, fromCoord, toCoord, currentPlayer)) {
+    const tempBoardForCheck = board.map(r => r.slice());
+    tempBoardForCheck[toCoord.row][toCoord.col] = pieceToMove;
+    tempBoardForCheck[fromCoord.row][fromCoord.col] = null;
+
+    if (!isValidMove(board, fromCoord, toCoord, currentPlayer) || isKingInCheck(tempBoardForCheck, currentPlayer)) {
       toast({
         title: "Invalid Move",
-        description: "This move is not allowed by the rules.",
+        description: "This move is not allowed or would leave your King in check.",
         variant: "destructive",
-        duration: 2000,
+        duration: 3000,
       });
       return;
     }
@@ -110,15 +128,17 @@ export default function PlayLocalPage() {
     
     newBoard[toCoord.row][toCoord.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
-    setBoard(newBoard);
+    
     setLastMove({ from: fromCoord, to: toCoord });
-    const moveDescription = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} moves ${pieceToMove.type} from (${String.fromCharCode(97 + fromCoord.col)}${8 - fromCoord.row}) to (${String.fromCharCode(97 + toCoord.col)}${8 - toCoord.row})`;
+    const capturedPieceSymbol = targetPieceOnBoard ? ` ${targetPieceOnBoard.type}` : "";
+    const moveDescription = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} moves ${pieceToMove.type} from (${String.fromCharCode(97 + fromCoord.col)}${8 - fromRow}) to (${String.fromCharCode(97 + toCoord.col)}${8 - toCoord.row})${capturedPieceSymbol ? " capturing" + capturedPieceSymbol : ""}`;
     setMoveHistory(prev => [...prev, moveDescription]);
-
 
     if (targetPieceOnBoard && targetPieceOnBoard.type === 'K') {
       setGameStatus(currentPlayer === 'white' ? 'white_win' : 'black_win');
       toast({ title: "Game Over!", description: `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} wins by capturing the King!`, duration: 5000});
+      setBoard(newBoard); // Update board before returning
+      updateCheckStatus(newBoard, currentPlayer === 'white' ? 'black' : 'white');
       return;
     }
 
@@ -127,33 +147,52 @@ export default function PlayLocalPage() {
         setPromotingSquare(toCoord);
         setPromotionColor('white');
         setShowPromotionDialog(true);
+        setBoard(newBoard); // Update board before showing dialog
+        updateCheckStatus(newBoard, 'black'); // Check status for opponent
         return; 
       } else if (currentPlayer === 'black' && toCoord.row === 7) {
         setPromotingSquare(toCoord);
         setPromotionColor('black');
         setShowPromotionDialog(true);
+        setBoard(newBoard); // Update board before showing dialog
+        updateCheckStatus(newBoard, 'white'); // Check status for opponent
         return; 
       }
     }
     
     const nextPlayerColor = currentPlayer === 'white' ? 'black' : 'white';
-    let hasValidMoves = false;
+    setBoard(newBoard); // Update board state here for the move
+    updateCheckStatus(newBoard, nextPlayerColor); // Check status for next player
+
+    let hasValidMovesForNextPlayer = false;
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
         const piece = newBoard[r][c];
         if (piece && piece.color === nextPlayerColor) {
-          if (getValidMovesForPiece(newBoard, {row: r, col: c}).length > 0) {
-            hasValidMoves = true;
-            break;
+          const validPlayerMoves = getValidMovesForPiece(newBoard, {row: r, col: c});
+          for(const move of validPlayerMoves) {
+            const tempBoardForNextPlayer = newBoard.map(row => row.slice());
+            tempBoardForNextPlayer[move.row][move.col] = piece;
+            tempBoardForNextPlayer[r][c] = null;
+            if (!isKingInCheck(tempBoardForNextPlayer, nextPlayerColor)) {
+                hasValidMovesForNextPlayer = true;
+                break;
+            }
           }
         }
+        if (hasValidMovesForNextPlayer) break;
       }
-      if (hasValidMoves) break;
+      if (hasValidMovesForNextPlayer) break;
     }
 
-    if (!hasValidMoves) {
-        setGameStatus('draw');
-        toast({ title: "Game Over - Draw!", description: `No legal moves for ${nextPlayerColor}.`, duration: 5000});
+    if (!hasValidMovesForNextPlayer) {
+        if (isKingInCheck(newBoard, nextPlayerColor)) {
+            setGameStatus(currentPlayer === 'white' ? 'white_win' : 'black_win');
+            toast({ title: "Game Over - Checkmate!", description: `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} wins!`, duration: 5000});
+        } else {
+            setGameStatus('draw');
+            toast({ title: "Game Over - Draw!", description: `Stalemate! No legal moves for ${nextPlayerColor}.`, duration: 5000});
+        }
         return;
     }
     
@@ -163,42 +202,58 @@ export default function PlayLocalPage() {
   const handlePromotionChoice = (promotionPieceType: PieceSymbol) => {
     if (!promotingSquare || !promotionColor) return;
 
-    const newBoard = board.map(row => [...row]);
-    newBoard[promotingSquare.row][promotingSquare.col] = createPiece(promotionPieceType, promotionColor);
-    setBoard(newBoard);
+    const boardAfterPromotion = board.map(row => [...row]); // Use current board state
+    boardAfterPromotion[promotingSquare.row][promotingSquare.col] = createPiece(promotionPieceType, promotionColor);
+    
     setMoveHistory(prev => [...prev, `${promotionColor.charAt(0).toUpperCase() + promotionColor.slice(1)} promotes pawn to ${promotionPieceType} at (${String.fromCharCode(97+promotingSquare.col)}${8-promotingSquare.row})`]);
-
     setShowPromotionDialog(false);
     
     const opponentColor = promotionColor === 'white' ? 'black' : 'white';
+    setBoard(boardAfterPromotion); // Update board state
+    updateCheckStatus(boardAfterPromotion, opponentColor); // Check opponent after promotion
+
     let kingFoundCheck = false;
-    newBoard.forEach(row => row.forEach(p => {
+    boardAfterPromotion.forEach(row => row.forEach(p => {
       if (p && p.type === 'K' && p.color === opponentColor) kingFoundCheck = true;
     }));
-    if (!kingFoundCheck) {
+
+    if (!kingFoundCheck) { // Should ideally not happen if king capture ends game
       setGameStatus(promotionColor === 'white' ? 'white_win' : 'black_win');
-      toast({ title: "Game Over!", description: `${promotionColor.charAt(0).toUpperCase() + promotionColor.slice(1)} wins! (King missing after promotion)`, duration: 5000});
+      toast({ title: "Game Over!", description: `${promotionColor.charAt(0).toUpperCase() + promotionColor.slice(1)} wins! (Opponent King missing)`, duration: 5000});
       setPromotingSquare(null);
       setPromotionColor(null);
       return;
     }
 
-    let hasValidMoves = false;
+    let hasValidMovesForOpponent = false;
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
-        const piece = newBoard[r][c];
+        const piece = boardAfterPromotion[r][c];
         if (piece && piece.color === opponentColor) {
-          if (getValidMovesForPiece(newBoard, {row: r, col: c}).length > 0) {
-            hasValidMoves = true;
-            break;
+          const validOpponentMoves = getValidMovesForPiece(boardAfterPromotion, {row: r, col: c});
+           for(const move of validOpponentMoves) {
+            const tempBoardForOpponent = boardAfterPromotion.map(row => row.slice());
+            tempBoardForOpponent[move.row][move.col] = piece;
+            tempBoardForOpponent[r][c] = null;
+            if (!isKingInCheck(tempBoardForOpponent, opponentColor)) {
+                hasValidMovesForOpponent = true;
+                break;
+            }
           }
         }
+        if (hasValidMovesForOpponent) break;
       }
-      if (hasValidMoves) break;
+      if (hasValidMovesForOpponent) break;
     }
-     if (!hasValidMoves) {
-        setGameStatus('draw');
-        toast({ title: "Game Over - Draw!", description: `No legal moves for ${opponentColor} after promotion.`, duration: 5000});
+
+     if (!hasValidMovesForOpponent) {
+        if(isKingInCheck(boardAfterPromotion, opponentColor)) {
+            setGameStatus(promotionColor === 'white' ? 'white_win' : 'black_win');
+            toast({ title: "Game Over - Checkmate!", description: `${promotionColor.charAt(0).toUpperCase() + promotionColor.slice(1)} wins!`, duration: 5000});
+        } else {
+            setGameStatus('draw');
+            toast({ title: "Game Over - Draw!", description: `Stalemate! No legal moves for ${opponentColor} after promotion.`, duration: 5000});
+        }
         setPromotingSquare(null);
         setPromotionColor(null);
         return;
@@ -210,7 +265,8 @@ export default function PlayLocalPage() {
   };
 
   const resetGame = () => {
-    setBoard(createInitialBoard());
+    const initialBoard = createInitialBoard();
+    setBoard(initialBoard);
     setCurrentPlayer('white');
     setGameStatus('ongoing');
     setMoveHistory([]);
@@ -219,6 +275,21 @@ export default function PlayLocalPage() {
     setPromotionColor(null);
     setLastMove(null);
     setHighlightedMoves([]);
+    setKingInCheckCoord(null);
+    setCheckMessage('');
+    updateCheckStatus(initialBoard, 'white');
+  };
+
+  const getGameStatusText = () => {
+    if (checkMessage && gameStatus === 'ongoing') return checkMessage;
+    switch (gameStatus) {
+      case 'white_win': return 'White Wins!';
+      case 'black_win': return 'Black Wins!';
+      case 'draw': return 'Draw!';
+      case 'ongoing': 
+        return showPromotionDialog ? 'Promoting...' : `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}'s Turn`;
+      default: return 'Game Over';
+    }
   };
 
   return (
@@ -228,7 +299,7 @@ export default function PlayLocalPage() {
           <Users className="mr-3 h-10 w-10" /> Local Multiplayer
         </h1>
         <p className="text-lg text-muted-foreground">
-          Two players, one board. Take turns making your moves. Follows basic chess rules.
+          Two players, one board. Take turns making your moves.
         </p>
       </header>
 
@@ -246,11 +317,12 @@ export default function PlayLocalPage() {
             currentPlayerColor={currentPlayer}
             lastMove={lastMove}
             highlightedMoves={highlightedMoves}
+            kingInCheckCoord={kingInCheckCoord}
           />
            {showPromotionDialog && promotingSquare && promotionColor && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-md">
-              <Card className="p-4 shadow-2xl w-auto">
-                <CardHeader className="p-3">
+              <Card className="p-4 shadow-2xl w-auto bg-card">
+                <CardHeader className="p-3 text-center">
                   <CardTitle className="text-xl">{promotionColor.charAt(0).toUpperCase() + promotionColor.slice(1)} Promotes Pawn</CardTitle>
                   <CardDescription className="text-sm">Choose a piece:</CardDescription>
                 </CardHeader>
@@ -260,7 +332,7 @@ export default function PlayLocalPage() {
                       key={pType}
                       onClick={() => handlePromotionChoice(pType)}
                       variant="outline"
-                      className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center hover:bg-accent focus:bg-accent"
+                      className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center hover:bg-accent focus:bg-accent text-3xl"
                       aria-label={`Promote to ${pType}`}
                     >
                       <Piece piece={createPiece(pType, promotionColor)} pieceStyle={pieceStyle} />
@@ -278,9 +350,14 @@ export default function PlayLocalPage() {
               <CardTitle>Game Info</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+             {checkMessage && gameStatus === 'ongoing' && (
+                <p className="flex items-center text-destructive font-semibold">
+                  <AlertTriangleIcon className="mr-2 h-5 w-5 shrink-0" /> {checkMessage}
+                </p>
+              )}
               <p className="flex items-center">
                 <Info className="mr-2 h-5 w-5 text-blue-500" />
-                Status: <span className="font-semibold ml-1 capitalize">{gameStatus.replace('_win', ' Wins').replace('ongoing', 'Ongoing')}</span>
+                Status: <span className="font-semibold ml-1">{getGameStatusText()}</span>
               </p>
               <p className="flex items-center">
                 <Check className="mr-2 h-5 w-5 text-green-500" />

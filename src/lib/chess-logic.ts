@@ -100,7 +100,7 @@ function getKingMoves(board: BoardState, from: SquareCoord, piece: ChessPiece): 
     { dr: 0, dc: -1 },                 { dr: 0, dc: 1 },
     { dr: 1, dc: -1 }, { dr: 1, dc: 0 }, { dr: 1, dc: 1 },
   ];
-  // Basic moves (castling and check prevention not handled here)
+  // Basic moves (castling and check prevention not handled here for now)
   for (const offset of kingOffsets) {
     const to = { row: from.row + offset.dr, col: from.col + offset.dc };
     if (isSquareOnBoard(to)) {
@@ -126,6 +126,7 @@ export function getValidMovesForPiece(board: BoardState, from: SquareCoord): Squ
     case 'K': return getKingMoves(board, from, piece);
     default: return [];
   }
+  // Future: Add logic to filter out moves that would leave the king in check.
 }
 
 export function isValidMove(board: BoardState, from: SquareCoord, to: SquareCoord, playerColor?: PieceColor): boolean {
@@ -134,5 +135,45 @@ export function isValidMove(board: BoardState, from: SquareCoord, to: SquareCoor
   if (playerColor && piece.color !== playerColor) return false; // Trying to move opponent's piece
 
   const validMoves = getValidMovesForPiece(board, from);
-  return validMoves.some(move => move.row === to.row && move.col === to.col);
+  const isMoveInList = validMoves.some(move => move.row === to.row && move.col === to.col);
+  if (!isMoveInList) return false;
+
+  // Future: Add check to see if this move puts the current player's king in check.
+  // For now, basic move validation is done.
+  return true;
+}
+
+export function findKing(board: BoardState, kingColor: PieceColor): SquareCoord | null {
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const piece = board[r][c];
+      if (piece && piece.type === 'K' && piece.color === kingColor) {
+        return { row: r, col: c };
+      }
+    }
+  }
+  return null;
+}
+
+export function isKingInCheck(board: BoardState, kingColor: PieceColor): boolean {
+  const kingPosition = findKing(board, kingColor);
+  if (!kingPosition) {
+    return false; // King not on board (e.g., captured, though game should end before this)
+  }
+
+  const opponentColor = kingColor === 'white' ? 'black' : 'white';
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const piece = board[r][c];
+      if (piece && piece.color === opponentColor) {
+        // Get raw attacking moves for the opponent's piece.
+        // This doesn't consider if the attacking piece is pinned itself.
+        const attackerMoves = getValidMovesForPiece(board, { row: r, col: c });
+        if (attackerMoves.some(move => move.row === kingPosition.row && move.col === kingPosition.col)) {
+          return true; // King is attacked by at least one piece
+        }
+      }
+    }
+  }
+  return false;
 }
