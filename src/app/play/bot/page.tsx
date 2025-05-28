@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -15,6 +14,7 @@ import { Piece } from '@/components/chess/piece';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 type GamePhase = 'setup' | 'playing' | 'ended';
 type DifficultyLevel = 'Beginner' | 'Medium' | 'Advanced';
@@ -142,7 +142,7 @@ export default function PlayBotPage() {
       }
 
       newBoardAfterAIMove[to.row][to.col] = null;
-      newBoardAfterAIMove[from.row][from.row] = null;
+      newBoardAfterAIMove[from.row][from.col] = null; // Corrected this line, was from.row from.row
 
       if (piece.type === 'P' && to.row === 7) {
         pieceToPlace = createPiece('Q', 'black');
@@ -194,7 +194,7 @@ export default function PlayBotPage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, gamePhase, showPromotionDialog, aiDifficulty, isPlayerTurn]);
+  }, [board, gamePhase, showPromotionDialog, aiDifficulty, isPlayerTurn, toast]); // Added toast to dependencies
 
   useEffect(() => {
     if (gamePhase !== 'playing') {
@@ -248,7 +248,8 @@ export default function PlayBotPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [activeTimer, gamePhase, whiteTime, blackTime]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTimer, gamePhase, whiteTime, blackTime, toast]); // Added toast to dependencies
 
 
   const handlePieceDragStart = (event: React.DragEvent<HTMLButtonElement>, fromCoord: SquareCoord, piece: ChessPiece) => {
@@ -330,7 +331,7 @@ export default function PlayBotPage() {
     const newBoard = board.map(row => [...row]);
     const targetPieceOnBoard = newBoard[toCoord.row][toCoord.col];
 
-    newBoard[toCoord.row][toCoord.col] = pieceToMove;
+    newBoard[toCoord.row][to.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
     setBoard(newBoard);
     setLastMove({ from: fromCoord, to: toCoord });
@@ -654,5 +655,7 @@ export default function PlayBotPage() {
     </div>
   );
 }
+
+    
 
     
