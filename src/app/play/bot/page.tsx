@@ -142,7 +142,7 @@ export default function PlayBotPage() {
       }
 
       newBoardAfterAIMove[to.row][to.col] = null;
-      newBoardAfterAIMove[from.row][from.col] = null; // Corrected this line, was from.row from.row
+      newBoardAfterAIMove[from.row][from.col] = null; 
 
       if (piece.type === 'P' && to.row === 7) {
         pieceToPlace = createPiece('Q', 'black');
@@ -194,7 +194,7 @@ export default function PlayBotPage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, gamePhase, showPromotionDialog, aiDifficulty, isPlayerTurn, toast]); // Added toast to dependencies
+  }, [board, gamePhase, showPromotionDialog, aiDifficulty, isPlayerTurn, toast]);
 
   useEffect(() => {
     if (gamePhase !== 'playing') {
@@ -249,7 +249,7 @@ export default function PlayBotPage() {
 
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTimer, gamePhase, whiteTime, blackTime, toast]); // Added toast to dependencies
+  }, [activeTimer, gamePhase, whiteTime, blackTime, toast]);
 
 
   const handlePieceDragStart = (event: React.DragEvent<HTMLButtonElement>, fromCoord: SquareCoord, piece: ChessPiece) => {
@@ -331,7 +331,7 @@ export default function PlayBotPage() {
     const newBoard = board.map(row => [...row]);
     const targetPieceOnBoard = newBoard[toCoord.row][toCoord.col];
 
-    newBoard[toCoord.row][to.col] = pieceToMove;
+    newBoard[toCoord.row][toCoord.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
     setBoard(newBoard);
     setLastMove({ from: fromCoord, to: toCoord });
@@ -655,7 +655,3 @@ export default function PlayBotPage() {
     </div>
   );
 }
-
-    
-
-    
