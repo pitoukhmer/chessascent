@@ -2,7 +2,7 @@
 import React from 'react';
 import type { JSX } from 'react';
 import type { ChessPiece, PieceColor, PieceSymbol, Tutorial, BoardState } from '@/components/chess/types';
-import { Castle } from 'lucide-react'; // Castle was already imported, used it. Other icons not used here.
+import { Castle } from 'lucide-react';
 
 
 export const PIECE_UNICODE: Record<PieceColor, Record<PieceSymbol, string>> = {
@@ -51,10 +51,13 @@ export function createInitialBoard(): BoardState {
 
 export const INITIAL_FEN_STANDARD = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-// Define Icon Components using React.createElement to avoid JSX parsing issues in .ts file
+// Define Icon Components using React.createElement
 const PawnIcon = (): JSX.Element => React.createElement('span', { className: "text-2xl" }, PIECE_UNICODE.white.P);
 const KnightIcon = (): JSX.Element => React.createElement('span', { className: "text-2xl" }, PIECE_UNICODE.white.N);
 const RookIcon = (): JSX.Element => React.createElement('span', { className: "text-2xl" }, PIECE_UNICODE.white.R);
+const BishopIcon = (): JSX.Element => React.createElement('span', { className: "text-2xl" }, PIECE_UNICODE.white.B);
+const QueenIcon = (): JSX.Element => React.createElement('span', { className: "text-2xl" }, PIECE_UNICODE.white.Q);
+const KingIcon = (): JSX.Element => React.createElement('span', { className: "text-2xl" }, PIECE_UNICODE.white.K);
 
 
 export const TUTORIALS_DATA: Tutorial[] = [
@@ -68,10 +71,10 @@ export const TUTORIALS_DATA: Tutorial[] = [
     initialBoard: (() => {
         const board = createEmptyBoard();
         board[6][3] = createPiece('P', 'white'); // d2
-        board[4][4] = createPiece('P', 'black'); // e4 (for capture example for white pawn on d3)
+        board[4][4] = createPiece('p', 'black'); // e4 (black pawn)
         return board;
     })(),
-    initialFen: '8/8/8/8/4p3/8/3P4/8 w - - 0 1', // White pawn on d2, black pawn on e4 (original was e5)
+    initialFen: '8/8/8/8/4p3/8/3P4/8 w - - 0 1', // White pawn on d2, black pawn on e4
     learningObjectives: [
       'Understand pawn initial two-square move.',
       'Understand pawn single-square forward move.',
@@ -118,6 +121,64 @@ export const TUTORIALS_DATA: Tutorial[] = [
     ],
   },
   {
+    slug: 'bishop-movement',
+    title: 'The Bishop',
+    description: 'Learn how bishops move diagonally. Explore AI suggestions for bishop activity.',
+    icon: BishopIcon,
+    estimatedTime: '3 mins',
+    difficulty: 'Beginner',
+    initialBoard: (() => {
+        const board = createEmptyBoard();
+        board[7][2] = createPiece('B', 'white'); // c1
+        board[4][6] = createPiece('p', 'black'); // g5 (black pawn as a target)
+        return board;
+    })(),
+    initialFen: '8/8/8/6p1/8/8/8/2B5 w - - 0 1', // White bishop c1, Black pawn g5
+    learningObjectives: [
+      'Understand bishop diagonal movement.',
+      'Identify squares controlled by a bishop.',
+      'Get AI suggestions for effective bishop moves.',
+    ],
+  },
+  {
+    slug: 'queen-movement',
+    title: 'The Queen',
+    description: 'Discover the power of the queen, moving like a rook and bishop combined. See AI ideas for queen activity.',
+    icon: QueenIcon,
+    estimatedTime: '4 mins',
+    difficulty: 'Beginner',
+    initialBoard: (() => {
+        const board = createEmptyBoard();
+        board[7][3] = createPiece('Q', 'white'); // d1
+        return board;
+    })(),
+    initialFen: '8/8/8/8/8/8/8/3Q4 w - - 0 1', // White queen on d1
+    learningObjectives: [
+      'Understand queen movement (horizontal, vertical, and diagonal).',
+      'Recognize the queen as the most powerful piece.',
+      'Get AI suggestions for queen deployment.',
+    ],
+  },
+  {
+    slug: 'king-movement',
+    title: 'The King',
+    description: "Learn the king's basic movement (one square in any direction) and its importance. Castling is covered separately.",
+    icon: KingIcon,
+    estimatedTime: '3 mins',
+    difficulty: 'Beginner',
+    initialBoard: (() => {
+        const board = createEmptyBoard();
+        board[7][4] = createPiece('K', 'white'); // e1
+        return board;
+    })(),
+    initialFen: '8/8/8/8/8/8/8/4K3 w - - 0 1', // White king on e1
+    learningObjectives: [
+      "Understand king's one-square movement in any direction.",
+      "Recognize the king's critical role and vulnerability.",
+      "Get AI suggestions for basic king positioning (non-castling focus).",
+    ],
+  },
+  {
     slug: 'kingside-castling',
     title: 'Kingside Castling',
     description: 'Learn the special King safety move: Kingside Castling. Understand the rules and see AI suggestions.',
@@ -130,18 +191,14 @@ export const TUTORIALS_DATA: Tutorial[] = [
         board[7][0] = createPiece('R', 'white'); // White Rook on a1
         board[7][4] = createPiece('K', 'white'); // White King on e1
         board[7][7] = createPiece('R', 'white'); // White Rook on h1
-        // Add some pawns for realism, but ensure castling paths are clear
-        for (let i = 0; i < 3; i++) { // a,b,c pawns
+        for (let i = 0; i < 3; i++) {
             board[6][i] = createPiece('P', 'white');
         }
-        for (let i = 5; i < 8; i++) { // f,g,h pawns
+        for (let i = 5; i < 8; i++) {
             board[6][i] = createPiece('P', 'white');
         }
         return board;
     })(),
-    // FEN for White: Ke1, Ra1, Rh1. Black: Ke8. White pawns: a2,b2,c2,f2,g2,h2.
-    // Simplified FEN for tutorial: 4k3/8/8/8/8/8/PPP2PPP/R3K2R w KQ - 0 1
-    // More specific for Kingside focus, but allowing both for AI suggestion robustness.
     initialFen: '4k3/8/8/8/8/8/PPP2PPP/R3K2R w KQ - 0 1',
     learningObjectives: [
       "Understand conditions for castling (King/Rook haven't moved, no pieces between, King not in check, squares King passes not attacked).",
@@ -151,4 +208,3 @@ export const TUTORIALS_DATA: Tutorial[] = [
     ],
   },
 ];
-
