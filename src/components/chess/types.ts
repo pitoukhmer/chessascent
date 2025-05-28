@@ -44,3 +44,16 @@ export interface Tutorial {
 export type PieceStyle = 'unicode' | 'graphical';
 export type BoardTheme = 'default' | 'green' | 'blue' | 'brown';
 
+export interface ChessboardProps {
+  boardState: BoardState;
+  disabled?: boolean; 
+  pieceStyle?: PieceStyle;
+  boardTheme?: BoardTheme;
+  onPieceDragStart?: (event: React.DragEvent<HTMLButtonElement>, coord: SquareCoord, piece: ChessPiece) => void;
+  onSquareDrop?: (event: React.DragEvent<HTMLButtonElement>, coord: SquareCoord) => void;
+  onDragEndCapture?: () => void; // Used to clear highlights if drag is cancelled
+  currentPlayerColor?: PieceColor;
+  isWhiteView?: boolean; // For potential board flipping, not fully used yet beyond orientation
+  lastMove?: { from: SquareCoord, to: SquareCoord } | null;
+  highlightedMoves?: SquareCoord[];
+}

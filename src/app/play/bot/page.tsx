@@ -29,10 +29,14 @@ export default function PlayBotPage() {
   const [boardTheme, setBoardTheme] = useState<BoardTheme>('default');
   const { toast } = useToast();
 
+  const [lastMove, setLastMove] = useState<{ from: SquareCoord, to: SquareCoord } | null>(null);
+  const [highlightedMoves, setHighlightedMoves] = useState<SquareCoord[]>([]);
+
+
   const makeAiMove = () => {
     if (gameStatus !== 'ongoing' || showPromotionDialog) return;
 
-    const currentBoardForAIMove = board.map(row => [...row]); // Use the current board state
+    const currentBoardForAIMove = board.map(row => [...row]); 
     const allLegalAiMoves: { from: SquareCoord, to: SquareCoord, piece: ChessPiece, isCapture: boolean }[] = [];
 
     for (let r = 0; r < 8; r++) {
@@ -94,6 +98,7 @@ export default function PlayBotPage() {
       }
       newBoardAfterAIMove[to.row][to.col] = pieceToPlace;
       
+      setLastMove({ from, to });
       setMoveHistory(prev => [...prev, moveDescription]);
       setBoard(newBoardAfterAIMove);
 
@@ -132,18 +137,17 @@ export default function PlayBotPage() {
     if (!isPlayerTurn && gameStatus === 'ongoing' && !showPromotionDialog) {
       const timer = setTimeout(() => {
         makeAiMove();
-      }, 500); // Delay AI move for visual pacing
-      return () => clearTimeout(timer); // Cleanup timer on component unmount or if dependencies change
+      }, 500); 
+      return () => clearTimeout(timer);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlayerTurn, gameStatus, board, showPromotionDialog]); // `board` is a crucial dependency here
+  }, [isPlayerTurn, gameStatus, board, showPromotionDialog]); 
 
   const handlePieceDragStart = (event: React.DragEvent<HTMLButtonElement>, fromCoord: SquareCoord, piece: ChessPiece) => {
     if (piece.color !== 'white' || !isPlayerTurn || gameStatus !== 'ongoing' || showPromotionDialog) {
       event.preventDefault();
       return;
     }
-    // Temporarily removed custom drag image logic for stability
     // const pieceElement = event.currentTarget.firstChild?.cloneNode(true) as HTMLElement;
     // if (pieceElement) {
     //     pieceElement.style.position = "absolute";
@@ -161,10 +165,18 @@ export default function PlayBotPage() {
     // }
     event.dataTransfer.setData('text/plain', `${fromCoord.row},${fromCoord.col}`);
     event.dataTransfer.effectAllowed = 'move';
+
+    const validMoves = getValidMovesForPiece(board, fromCoord);
+    setHighlightedMoves(validMoves);
+  };
+
+  const handleDragEnd = () => {
+    setHighlightedMoves([]);
   };
 
   const handleSquareDrop = (event: React.DragEvent<HTMLButtonElement>, toCoord: SquareCoord) => {
     event.preventDefault();
+    setHighlightedMoves([]);
     if (!isPlayerTurn || gameStatus !== 'ongoing' || showPromotionDialog) {
       return;
     }
@@ -211,7 +223,8 @@ export default function PlayBotPage() {
     
     newBoard[toCoord.row][toCoord.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
-    setBoard(newBoard); // Player's move is applied
+    setBoard(newBoard); 
+    setLastMove({ from: fromCoord, to: toCoord });
     const moveDescription = `Player moves ${pieceToMove.type} from (${String.fromCharCode(97 + fromCoord.col)}${8 - fromCoord.row}) to (${String.fromCharCode(97 + toCoord.col)}${8 - toCoord.row})`;
     setMoveHistory(prev => [...prev, moveDescription]);
 
@@ -223,10 +236,8 @@ export default function PlayBotPage() {
     } else if (pieceToMove.type === 'P' && toCoord.row === 0) { 
         setPromotingSquare(toCoord);
         setShowPromotionDialog(true);
-        // setIsPlayerTurn is NOT set to false here; player needs to promote first.
-        // The useEffect will not trigger AI move because showPromotionDialog is true.
     } else {
-        setIsPlayerTurn(false); // AI's turn now, useEffect will trigger makeAiMove
+        setIsPlayerTurn(false); 
     }
   };
 
@@ -235,7 +246,7 @@ export default function PlayBotPage() {
 
     const newBoard = board.map(row => [...row]);
     newBoard[promotingSquare.row][promotingSquare.col] = createPiece(promotionPieceType, 'white');
-    setBoard(newBoard); // Board updated with promoted piece
+    setBoard(newBoard); 
     setMoveHistory(prev => [...prev, `Player promotes pawn to ${promotionPieceType} at (${String.fromCharCode(97+promotingSquare.col)}${8-promotingSquare.row})`]);
 
     setShowPromotionDialog(false);
@@ -252,8 +263,7 @@ export default function PlayBotPage() {
         return;
     }
     
-    // After promotion, it becomes AI's turn
-    setIsPlayerTurn(false); // useEffect will trigger makeAiMove
+    setIsPlayerTurn(false); 
   };
 
   const resetGame = () => {
@@ -264,6 +274,8 @@ export default function PlayBotPage() {
     setShowFeedbackButton(false);
     setShowPromotionDialog(false);
     setPromotingSquare(null);
+    setLastMove(null);
+    setHighlightedMoves([]);
   };
 
   const generateMockPgn = () => {
@@ -326,7 +338,10 @@ export default function PlayBotPage() {
             boardTheme={boardTheme}
             onPieceDragStart={handlePieceDragStart}
             onSquareDrop={handleSquareDrop}
-            currentPlayerColor={isPlayerTurn ? 'white' : 'black'}
+            onDragEndCapture={handleDragEnd}
+            currentPlayerColor={'white'} // Player is always white vs bot
+            lastMove={lastMove}
+            highlightedMoves={highlightedMoves}
           />
            {showPromotionDialog && promotingSquare && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-md">
@@ -433,4 +448,3 @@ export default function PlayBotPage() {
     </div>
   );
 }
-

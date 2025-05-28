@@ -28,32 +28,42 @@ export default function PlayLocalPage() {
   const [boardTheme, setBoardTheme] = useState<BoardTheme>('default');
   const { toast } = useToast();
 
+  const [lastMove, setLastMove] = useState<{ from: SquareCoord, to: SquareCoord } | null>(null);
+  const [highlightedMoves, setHighlightedMoves] = useState<SquareCoord[]>([]);
+
   const handlePieceDragStart = (event: React.DragEvent<HTMLButtonElement>, fromCoord: SquareCoord, piece: ChessPiece) => {
     if (piece.color !== currentPlayer || gameStatus !== 'ongoing' || showPromotionDialog) {
       event.preventDefault();
       return;
     }
-    const pieceElement = event.currentTarget.firstChild?.cloneNode(true) as HTMLElement;
-    if (pieceElement) {
-        pieceElement.style.position = "absolute";
-        pieceElement.style.left = "-9999px";
-        pieceElement.style.width = "48px"; 
-        pieceElement.style.height = "48px";
-        pieceElement.style.fontSize = "40px"; 
-        document.body.appendChild(pieceElement);
-        event.dataTransfer.setDragImage(pieceElement, 24, 24);
-        setTimeout(() => {
-            if (pieceElement.parentNode) {
-                pieceElement.parentNode.removeChild(pieceElement);
-            }
-        }, 0);
-    }
+    // const pieceElement = event.currentTarget.firstChild?.cloneNode(true) as HTMLElement;
+    // if (pieceElement) {
+    //     pieceElement.style.position = "absolute";
+    //     pieceElement.style.left = "-9999px";
+    //     pieceElement.style.width = "48px"; 
+    //     pieceElement.style.height = "48px";
+    //     pieceElement.style.fontSize = "40px"; 
+    //     document.body.appendChild(pieceElement);
+    //     event.dataTransfer.setDragImage(pieceElement, 24, 24);
+    //     setTimeout(() => {
+    //         if (pieceElement.parentNode) {
+    //             pieceElement.parentNode.removeChild(pieceElement);
+    //         }
+    //     }, 0);
+    // }
     event.dataTransfer.setData('text/plain', `${fromCoord.row},${fromCoord.col}`);
     event.dataTransfer.effectAllowed = 'move';
+    const validMoves = getValidMovesForPiece(board, fromCoord);
+    setHighlightedMoves(validMoves);
+  };
+
+  const handleDragEnd = () => {
+    setHighlightedMoves([]);
   };
 
   const handleSquareDrop = (event: React.DragEvent<HTMLButtonElement>, toCoord: SquareCoord) => {
     event.preventDefault();
+    setHighlightedMoves([]);
     if (gameStatus !== 'ongoing' || showPromotionDialog) {
       return;
     }
@@ -101,6 +111,7 @@ export default function PlayLocalPage() {
     newBoard[toCoord.row][toCoord.col] = pieceToMove;
     newBoard[fromCoord.row][fromCoord.col] = null;
     setBoard(newBoard);
+    setLastMove({ from: fromCoord, to: toCoord });
     const moveDescription = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} moves ${pieceToMove.type} from (${String.fromCharCode(97 + fromCoord.col)}${8 - fromCoord.row}) to (${String.fromCharCode(97 + toCoord.col)}${8 - toCoord.row})`;
     setMoveHistory(prev => [...prev, moveDescription]);
 
@@ -125,7 +136,6 @@ export default function PlayLocalPage() {
       }
     }
     
-    // Check for stalemate (simplified: no valid moves for next player)
     const nextPlayerColor = currentPlayer === 'white' ? 'black' : 'white';
     let hasValidMoves = false;
     for (let r = 0; r < 8; r++) {
@@ -142,8 +152,6 @@ export default function PlayLocalPage() {
     }
 
     if (!hasValidMoves) {
-        // More accurate check: is the current player's king in check? If not, it's stalemate. If yes, checkmate.
-        // For simplicity now, we'll call it a draw if no valid moves.
         setGameStatus('draw');
         toast({ title: "Game Over - Draw!", description: `No legal moves for ${nextPlayerColor}.`, duration: 5000});
         return;
@@ -162,7 +170,6 @@ export default function PlayLocalPage() {
 
     setShowPromotionDialog(false);
     
-    // Check for win/draw after promotion
     const opponentColor = promotionColor === 'white' ? 'black' : 'white';
     let kingFoundCheck = false;
     newBoard.forEach(row => row.forEach(p => {
@@ -210,6 +217,8 @@ export default function PlayLocalPage() {
     setShowPromotionDialog(false);
     setPromotingSquare(null);
     setPromotionColor(null);
+    setLastMove(null);
+    setHighlightedMoves([]);
   };
 
   return (
@@ -232,8 +241,11 @@ export default function PlayLocalPage() {
             boardTheme={boardTheme}
             onPieceDragStart={handlePieceDragStart}
             onSquareDrop={handleSquareDrop}
+            onDragEndCapture={handleDragEnd}
             isWhiteView={true} 
             currentPlayerColor={currentPlayer}
+            lastMove={lastMove}
+            highlightedMoves={highlightedMoves}
           />
            {showPromotionDialog && promotingSquare && promotionColor && (
             <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-md">

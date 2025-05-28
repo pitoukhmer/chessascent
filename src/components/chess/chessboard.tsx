@@ -1,42 +1,32 @@
 
 'use client';
 
-import type { BoardState, SquareCoord, PieceStyle, BoardTheme, ChessPiece, PieceColor } from './types';
+import type { BoardState, SquareCoord, PieceStyle, BoardTheme, ChessPiece, PieceColor, ChessboardProps } from './types';
 import { Piece } from './piece';
 import { cn } from '@/lib/utils';
 
-interface ChessboardProps {
-  boardState: BoardState;
-  possibleMoves?: SquareCoord[];
-  isWhiteView?: boolean;
-  disabled?: boolean; 
-  pieceStyle?: PieceStyle;
-  boardTheme?: BoardTheme;
-  onPieceDragStart?: (event: React.DragEvent<HTMLButtonElement>, coord: SquareCoord, piece: ChessPiece) => void;
-  onSquareDrop?: (event: React.DragEvent<HTMLButtonElement>, coord: SquareCoord) => void;
-  currentPlayerColor?: PieceColor; // Optional: To disable opponent's pieces even if board is "enabled" for current player
-}
-
 export function Chessboard({
   boardState,
-  possibleMoves = [],
   isWhiteView = true,
   disabled = false,
   pieceStyle = 'unicode',
   boardTheme = 'default',
   onPieceDragStart,
   onSquareDrop,
+  onDragEndCapture,
   currentPlayerColor,
+  lastMove,
+  highlightedMoves = [],
 }: ChessboardProps) {
 
   const getSquareColors = (isDark: boolean): string => {
     switch (boardTheme) {
       case 'green':
-        return isDark ? 'bg-green-700 hover:bg-green-800' : 'bg-green-200 hover:bg-green-300';
+        return isDark ? 'bg-green-700 hover:bg-green-800/80' : 'bg-green-200 hover:bg-green-300/80';
       case 'blue':
-        return isDark ? 'bg-blue-700 hover:bg-blue-800' : 'bg-blue-200 hover:bg-blue-300';
+        return isDark ? 'bg-blue-700 hover:bg-blue-800/80' : 'bg-blue-200 hover:bg-blue-300/80';
       case 'brown':
-        return isDark ? 'bg-yellow-700 hover:bg-yellow-800' : 'bg-yellow-200 hover:bg-yellow-300';
+        return isDark ? 'bg-yellow-700 hover:bg-yellow-800/80' : 'bg-yellow-200 hover:bg-yellow-300/80';
       case 'default':
       default:
         return isDark ? 'bg-primary/70 hover:bg-primary/80' : 'bg-secondary hover:bg-secondary/80';
@@ -48,17 +38,34 @@ export function Chessboard({
     const coord = { row, col };
     
     const isDark = (row + col) % 2 !== 0;    
-    const isPossibleMove = possibleMoves.some(m => m.row === row && m.col === col);
     
-    let isPieceDraggable = false;
-    if (piece && !disabled) {
-      if (currentPlayerColor) { // If currentPlayerColor is provided, only that player's pieces are draggable
-        isPieceDraggable = piece.color === currentPlayerColor;
-      } else { // Fallback for modes like bot play where only white is player-controlled
-        isPieceDraggable = piece.color === 'white'; 
+    let isPotentiallyPlayerPiece = false;
+    if (piece) {
+      if (currentPlayerColor) {
+        isPotentiallyPlayerPiece = piece.color === currentPlayerColor;
+      } else { // Fallback mainly for bot game where player is always white
+        isPotentiallyPlayerPiece = piece.color === 'white';
       }
     }
+    
+    const isDraggable = isPotentiallyPlayerPiece && !disabled;
 
+    // Highlighting logic
+    const isLastMoveFrom = lastMove && lastMove.from.row === row && lastMove.from.col === col;
+    const isLastMoveTo = lastMove && lastMove.to.row === row && lastMove.to.col === col;
+    const isHighlightedAsPossibleMove = highlightedMoves.some(m => m.row === row && m.col === col);
+
+    let highlightClass = '';
+    if (isLastMoveFrom || isLastMoveTo) {
+      highlightClass = 'bg-yellow-400/60 dark:bg-yellow-600/60 ring-1 ring-yellow-500';
+    } else if (isHighlightedAsPossibleMove) {
+      const targetPiece = boardState[row][col];
+      if (targetPiece && currentPlayerColor && targetPiece.color !== currentPlayerColor) { // It's a capture
+        highlightClass = 'bg-red-500/40 dark:bg-red-700/40 ring-2 ring-red-600';
+      } else { // Move to empty square
+         highlightClass = 'relative after:content-[""] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-3 after:h-3 after:bg-green-500/70 dark:after:bg-green-400/70 after:rounded-full';
+      }
+    }
 
     return (
       <button
@@ -66,33 +73,36 @@ export function Chessboard({
         className={cn(
           'w-full aspect-square flex items-center justify-center transition-colors duration-150 focus:outline-none',
           getSquareColors(isDark),
-          isPossibleMove && !piece && 'bg-accent/30 hover:bg-accent/40', 
-          isPossibleMove && piece && 'bg-destructive/30 hover:bg-destructive/40', 
-          disabled && 'cursor-not-allowed opacity-70',
-          piece && !isPieceDraggable && 'cursor-not-allowed', // Piece is not current player's
+          highlightClass,
+          disabled && !isDraggable && 'cursor-not-allowed opacity-70',
+          piece && !isDraggable && 'cursor-default', // Not current player's piece or board disabled for piece
         )}
-        onClick={() => { /* Clicks are inert if using D&D; or handle selection here */ }}
         onDragStart={(e) => {
-          if (isPieceDraggable && onPieceDragStart && piece) {
+          if (isDraggable && onPieceDragStart && piece) {
             onPieceDragStart(e, coord, piece);
           } else {
             e.preventDefault(); 
           }
         }}
         onDragOver={(e) => {
-          if (!disabled) { 
+          if (!disabled) { // Allow drop if the board itself is not disabled
             e.preventDefault(); 
             e.dataTransfer.dropEffect = "move";
           }
         }}
         onDrop={(e) => {
           e.preventDefault(); 
-          if (!disabled && onSquareDrop) {
+          if (!disabled && onSquareDrop) { // Only process drop if board not disabled
             onSquareDrop(e, coord);
           }
         }}
-        draggable={isPieceDraggable}
-        disabled={disabled || (piece && !isPieceDraggable)} 
+        onDragEndCapture={() => { // This helps clear highlights if drag is cancelled (e.g. dropped outside board)
+          if (onDragEndCapture) {
+            onDragEndCapture();
+          }
+        }}
+        draggable={isDraggable}
+        disabled={disabled && !isDraggable} // Button is disabled if board is disabled AND it's not a draggable piece
         aria-label={`Square ${String.fromCharCode(97 + col)}${8 - row}${piece ? `, ${piece.color} ${piece.type}` : ''}`}
       >
         <Piece piece={piece} pieceStyle={pieceStyle} />
@@ -113,8 +123,8 @@ export function Chessboard({
         'border-card bg-background'
       )}
     >
-      {rowsToRender.map((row) =>
-        colsToRender.map((col) => renderSquare(row, col))
+      {rowsToRender.map((rowIdx) =>
+        colsToRender.map((colIdx) => renderSquare(rowIdx, colIdx))
       )}
     </div>
   );
