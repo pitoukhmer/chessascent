@@ -9,7 +9,7 @@ import { createInitialBoard, createPiece } from '@/lib/constants';
 import { isValidMove, getValidMovesForPiece } from '@/lib/chess-logic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { RotateCcw, Info, Check, Settings, TimerIcon, Play, ChevronRight, BarChart3, CpuIcon } from 'lucide-react';
+import { RotateCcw, Info, Check, Settings, TimerIcon, Play, CpuIcon, BarChart3 } from 'lucide-react';
 import { Piece } from '@/components/chess/piece';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -87,7 +87,7 @@ export default function PlayBotPage() {
 
     if (allLegalAiMoves.length === 0) {
       setGamePhase('ended');
-      setWinner('draw');
+      setWinner('draw'); // Correctly set to draw if AI has no moves
       setEndReason("Stalemate! AI has no legal moves.");
       toast({ title: "Game Over - Draw!", description: "AI has no legal moves.", duration: 5000 });
       setShowFeedbackButton(true);
@@ -97,7 +97,9 @@ export default function PlayBotPage() {
 
     let moveToMake: { from: SquareCoord, to: SquareCoord, piece: ChessPiece } | null = null;
     const captureMoves = allLegalAiMoves.filter(move => move.isCapture);
-    const promotingMoves = allLegalAiMoves.filter(m => m.piece.type === 'P' && m.to.row === 7);
+    const promotingMoves = allLegalAiMoves.filter(m => m.piece.type === 'P' && m.to.row === 7); // AI promotes on row 7 (its perspective)
+    
+    const pieceValues: Record<PieceSymbol, number> = { 'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 0 }; // King value not used for capture scoring
 
     if (aiDifficulty === 'Beginner') {
       if (captureMoves.length > 0) moveToMake = captureMoves[Math.floor(Math.random() * captureMoves.length)];
@@ -108,28 +110,64 @@ export default function PlayBotPage() {
         else if (allLegalAiMoves.length > 0) moveToMake = allLegalAiMoves[Math.floor(Math.random() * allLegalAiMoves.length)];
       }
     } else if (aiDifficulty === 'Medium') {
-      const knightBishopMoves = allLegalAiMoves.filter(m => !m.isCapture && (m.piece.type === 'N' || m.piece.type === 'B'));
-      const rookQueenMoves = allLegalAiMoves.filter(m => !m.isCapture && (m.piece.type === 'R' || m.piece.type === 'Q'));
-      const pawnMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'P');
+      if (captureMoves.length > 0) {
+        captureMoves.sort((a, b) => {
+          const pieceAVal = currentBoardForAIMove[a.to.row][a.to.col] ? pieceValues[currentBoardForAIMove[a.to.row][a.to.col]!.type] : 0;
+          const pieceBVal = currentBoardForAIMove[b.to.row][b.to.col] ? pieceValues[currentBoardForAIMove[b.to.row][b.to.col]!.type] : 0;
+          return pieceBVal - pieceAVal; // Higher value target first
+        });
+        moveToMake = captureMoves[0];
+      } else if (promotingMoves.length > 0) {
+        moveToMake = promotingMoves[Math.floor(Math.random() * promotingMoves.length)];
+      } else {
+        const knightMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'N');
+        const bishopMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'B');
+        const rookMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'R');
+        const queenMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'Q');
+        const pawnMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'P');
 
-      if (captureMoves.length > 0) moveToMake = captureMoves[Math.floor(Math.random() * captureMoves.length)];
-      else if (promotingMoves.length > 0) moveToMake = promotingMoves[Math.floor(Math.random() * promotingMoves.length)];
-      else if (knightBishopMoves.length > 0) moveToMake = knightBishopMoves[Math.floor(Math.random() * knightBishopMoves.length)];
-      else if (rookQueenMoves.length > 0) moveToMake = rookQueenMoves[Math.floor(Math.random() * rookQueenMoves.length)];
-      else if (pawnMoves.length > 0) moveToMake = pawnMoves[Math.floor(Math.random() * pawnMoves.length)];
-      else if (allLegalAiMoves.length > 0) moveToMake = allLegalAiMoves[Math.floor(Math.random() * allLegalAiMoves.length)];
-    } else { // Advanced (simplified)
-      const rookQueenMoves = allLegalAiMoves.filter(m => !m.isCapture && (m.piece.type === 'R' || m.piece.type === 'Q'));
-      const knightBishopMoves = allLegalAiMoves.filter(m => !m.isCapture && (m.piece.type === 'N' || m.piece.type === 'B'));
-      const pawnMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'P');
+        if (knightMoves.length > 0) moveToMake = knightMoves[Math.floor(Math.random() * knightMoves.length)];
+        else if (bishopMoves.length > 0) moveToMake = bishopMoves[Math.floor(Math.random() * bishopMoves.length)];
+        else if (rookMoves.length > 0) moveToMake = rookMoves[Math.floor(Math.random() * rookMoves.length)];
+        else if (queenMoves.length > 0) moveToMake = queenMoves[Math.floor(Math.random() * queenMoves.length)];
+        else if (pawnMoves.length > 0) moveToMake = pawnMoves[Math.floor(Math.random() * pawnMoves.length)];
+        else if (allLegalAiMoves.length > 0) moveToMake = allLegalAiMoves[Math.floor(Math.random() * allLegalAiMoves.length)];
+      }
+    } else { // Advanced
+      if (captureMoves.length > 0) {
+        captureMoves.sort((a, b) => {
+          const targetA = currentBoardForAIMove[a.to.row][a.to.col];
+          const targetB = currentBoardForAIMove[b.to.row][b.to.col];
+          const pieceAVal = targetA ? pieceValues[targetA.type] : 0;
+          const pieceBVal = targetB ? pieceValues[targetB.type] : 0;
+          
+          if (pieceBVal !== pieceAVal) {
+            return pieceBVal - pieceAVal; // Higher value target first
+          }
+          // If capturing same value target, prefer using a less valuable attacker
+          const attackerAVal = pieceValues[a.piece.type];
+          const attackerBVal = pieceValues[b.piece.type];
+          return attackerAVal - attackerBVal; // Lower value attacker first
+        });
+        moveToMake = captureMoves[0];
+      } else if (promotingMoves.length > 0) {
+        moveToMake = promotingMoves[Math.floor(Math.random() * promotingMoves.length)]; // Promote to Queen by default later
+      } else {
+        const queenMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'Q');
+        const rookMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'R');
+        const knightMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'N');
+        const bishopMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'B');
+        const pawnMoves = allLegalAiMoves.filter(m => !m.isCapture && m.piece.type === 'P');
 
-      if (captureMoves.length > 0) moveToMake = captureMoves[Math.floor(Math.random() * captureMoves.length)];
-      else if (promotingMoves.length > 0) moveToMake = promotingMoves[Math.floor(Math.random() * promotingMoves.length)];
-      else if (rookQueenMoves.length > 0) moveToMake = rookQueenMoves[Math.floor(Math.random() * rookQueenMoves.length)];
-      else if (knightBishopMoves.length > 0) moveToMake = knightBishopMoves[Math.floor(Math.random() * knightBishopMoves.length)];
-      else if (pawnMoves.length > 0) moveToMake = pawnMoves[Math.floor(Math.random() * pawnMoves.length)];
-      else if (allLegalAiMoves.length > 0) moveToMake = allLegalAiMoves[Math.floor(Math.random() * allLegalAiMoves.length)];
+        if (queenMoves.length > 0) moveToMake = queenMoves[Math.floor(Math.random() * queenMoves.length)];
+        else if (rookMoves.length > 0) moveToMake = rookMoves[Math.floor(Math.random() * rookMoves.length)];
+        else if (knightMoves.length > 0) moveToMake = knightMoves[Math.floor(Math.random() * knightMoves.length)];
+        else if (bishopMoves.length > 0) moveToMake = bishopMoves[Math.floor(Math.random() * bishopMoves.length)];
+        else if (pawnMoves.length > 0) moveToMake = pawnMoves[Math.floor(Math.random() * pawnMoves.length)];
+        else if (allLegalAiMoves.length > 0) moveToMake = allLegalAiMoves[Math.floor(Math.random() * allLegalAiMoves.length)];
+      }
     }
+
 
     if (moveToMake) {
       const { from, to, piece } = moveToMake;
@@ -141,10 +179,10 @@ export default function PlayBotPage() {
         moveDescription = `AI captures with ${piece.type} from (${String.fromCharCode(97 + from.col)}${8 - from.row}) to (${String.fromCharCode(97 + to.col)}${8 - to.row})`;
       }
 
-      newBoardAfterAIMove[to.row][to.col] = null;
+      newBoardAfterAIMove[to.row][to.col] = null; // Clear target square first
       newBoardAfterAIMove[from.row][from.col] = null; 
 
-      if (piece.type === 'P' && to.row === 7) {
+      if (piece.type === 'P' && to.row === 7) { // AI is black, promotes on row 7
         pieceToPlace = createPiece('Q', 'black');
         moveDescription += ` and promotes to Queen`;
       }
@@ -194,7 +232,7 @@ export default function PlayBotPage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, gamePhase, showPromotionDialog, aiDifficulty, isPlayerTurn, toast]);
+  }, [board, gamePhase, showPromotionDialog, aiDifficulty, isPlayerTurn, toast]); // Removed board from here to avoid potential infinite loops if AI logic relies on it too directly before player turn state changes
 
   useEffect(() => {
     if (gamePhase !== 'playing') {
@@ -208,7 +246,7 @@ export default function PlayBotPage() {
       }, 700); // AI "thinking" time
       return () => clearTimeout(timer);
     }
-  }, [isPlayerTurn, gamePhase, board, showPromotionDialog, makeAiMove]);
+  }, [isPlayerTurn, gamePhase, board, showPromotionDialog, makeAiMove]); // `board` is a dependency for `makeAiMove`
 
   useEffect(() => {
     if (gamePhase !== 'playing' || !activeTimer) {
@@ -257,17 +295,18 @@ export default function PlayBotPage() {
       event.preventDefault();
       return;
     }
-    // Custom drag image logic commented out for stability, can be re-added carefully
+    // Custom drag image logic (simplified - can be expanded)
     // const pieceElement = event.currentTarget.firstChild?.cloneNode(true) as HTMLElement;
     // if (pieceElement) {
+    //     // Basic styling for the drag image
     //     pieceElement.style.position = "absolute";
-    //     pieceElement.style.left = "-9999px";
-    //     pieceElement.style.width = "48px";
+    //     pieceElement.style.left = "-9999px"; // Keep it off-screen
+    //     pieceElement.style.width = "48px"; // Or your desired piece size
     //     pieceElement.style.height = "48px";
-    //     pieceElement.style.fontSize = "40px";
+    //     pieceElement.style.fontSize = "40px"; // Adjust if using text-based pieces
     //     document.body.appendChild(pieceElement);
-    //     event.dataTransfer.setDragImage(pieceElement, 24, 24);
-    //     setTimeout(() => {
+    //     event.dataTransfer.setDragImage(pieceElement, 24, 24); // Center the image
+    //     setTimeout(() => { // Cleanup
     //         if (pieceElement.parentNode) {
     //             pieceElement.parentNode.removeChild(pieceElement);
     //         }
@@ -346,7 +385,7 @@ export default function PlayBotPage() {
       toast({ title: "Game Over!", description: "You captured the AI's King!", duration: 5000 });
       setShowFeedbackButton(true);
       setActiveTimer(null);
-    } else if (pieceToMove.type === 'P' && toCoord.row === 0) {
+    } else if (pieceToMove.type === 'P' && toCoord.row === 0) { // Player is white, promotes on row 0
       setPromotingSquare(toCoord);
       setShowPromotionDialog(true);
       setActiveTimer(null); // Pause timer during promotion
@@ -404,9 +443,8 @@ export default function PlayBotPage() {
 
   const resetGame = () => {
     setGamePhase('setup');
-    // Reset settings to default for next game setup or allow user to keep current selections
-    // For now, let's keep selected time/difficulty
-    setBoard(createInitialBoard()); // Reset board for visual consistency in setup
+    // Reset board for visual consistency in setup, keep selected time/difficulty
+    setBoard(createInitialBoard()); 
     setIsPlayerTurn(true);
     setMoveHistory([]);
     setShowFeedbackButton(false);
@@ -414,57 +452,66 @@ export default function PlayBotPage() {
     setPromotingSquare(null);
     setLastMove(null);
     setHighlightedMoves([]);
-    setWhiteTime(selectedTimeControl);
-    setBlackTime(selectedTimeControl);
+    setWhiteTime(selectedTimeControl); // Reflects current selection for next game
+    setBlackTime(selectedTimeControl); // Reflects current selection for next game
     setActiveTimer(null);
     setWinner(null);
     setEndReason('');
   };
 
   const generateMockPgn = () => {
-    if (moveHistory.length === 0) return "1. e4 e5 *";
+    if (moveHistory.length === 0) return "1. e4 e5 *"; // Default placeholder
 
     let pgn = "";
     let moveCount = 1;
     moveHistory.forEach((move, index) => {
-      let simpleNotation = "??";
-      const parts = move.split(' ');
+      let simpleNotation = "??"; // Default for unparsed moves
+      const parts = move.split(' '); // e.g. "Player moves P from (d2) to (d4)"
+      // Attempt to parse the move string for PGN
       if (parts.length >= 6) {
-        const pieceType = parts.includes("with") ? parts[3] : parts[2];
-        const toSqAlgebraic = parts[parts.length - 1].replace(/[()]/g, '');
-        const fromSqAlgebraic = parts[parts.length - 3].replace(/[()]/g, '');
-        const action = move.toLowerCase().includes("capture") ? "x" : "";
+          const pieceType = parts.includes("with") ? parts[3] : parts[2]; // "P", "N", etc.
+          const toSqAlgebraic = parts[parts.length - 1].replace(/[()]/g, ''); // "d4"
+          const fromSqAlgebraic = parts[parts.length - 3].replace(/[()]/g, ''); // "d2"
+          const action = move.toLowerCase().includes("capture") ? "x" : "";
 
-        if (pieceType === "P") {
-          simpleNotation = action ? `${fromSqAlgebraic.charAt(0)}x${toSqAlgebraic}` : toSqAlgebraic;
-        } else {
-          simpleNotation = `${pieceType}${action}${toSqAlgebraic}`;
-        }
-        if (move.toLowerCase().includes("promotes to")) {
-          const promotedPieceToken = parts[parts.length - 1];
-          simpleNotation += `=${promotedPieceToken.charAt(0).toUpperCase()}`;
-        }
+          if (pieceType === "P") { // Pawn moves are just the destination square, or file + x + square for captures
+            simpleNotation = action ? `${fromSqAlgebraic.charAt(0)}x${toSqAlgebraic}` : toSqAlgebraic;
+          } else {
+            simpleNotation = `${pieceType}${action}${toSqAlgebraic}`;
+          }
+          // Append promotion, e.g. e8=Q
+          if (move.toLowerCase().includes("promotes to")) {
+            const promotedPieceToken = parts[parts.length - 1]; // This part of the parsing might be fragile. Assumes last word is piece type.
+                                                              // Example: "Player promotes pawn to Q at (e8)" - Need to grab 'Q'
+                                                              // A better way: if "promotes to X", X is the piece.
+            const promotionParts = move.split(' ');
+            const promotionIndex = promotionParts.indexOf("to");
+            if (promotionIndex !== -1 && promotionIndex + 1 < promotionParts.length) {
+                 simpleNotation = toSqAlgebraic + `=${promotionParts[promotionIndex+1].charAt(0).toUpperCase()}`;
+            }
+          }
       }
-
-      if (index % 2 === 0) {
+      
+      if (index % 2 === 0) { // White's move
         pgn += `${moveCount}. ${simpleNotation} `;
-      } else {
+      } else { // Black's move
         pgn += `${simpleNotation} `;
         moveCount++;
       }
     });
 
+    // Append game result
     if (winner === 'white') pgn += "1-0";
     else if (winner === 'black') pgn += "0-1";
     else if (winner === 'draw') pgn += "1/2-1/2";
-    else pgn += "*";
+    else pgn += "*"; // Game in progress or aborted
 
     return pgn.trim();
   };
-
+  
   const getGameStatusMessage = () => {
     if (gamePhase === 'playing') {
-      return isPlayerTurn ? (showPromotionDialog ? 'Promoting...' : 'Your (White)') : 'AI (Black)';
+      return isPlayerTurn ? (showPromotionDialog ? 'Promoting...' : 'Your Turn (White)') : "AI's Turn (Black)";
     }
     if (gamePhase === 'ended') {
       if (winner === 'white') return `You Win! ${endReason}`;
@@ -472,7 +519,7 @@ export default function PlayBotPage() {
       if (winner === 'draw') return `Draw! ${endReason}`;
       return 'Game Over';
     }
-    return 'Setup';
+    return 'Setup Game'; // Initial state
   };
 
 
@@ -481,20 +528,20 @@ export default function PlayBotPage() {
       <header className="text-center space-y-2">
         <h1 className="text-4xl font-bold text-primary">Play Against Bot</h1>
         {gamePhase === 'setup' && <p className="text-lg text-muted-foreground">Configure your game and start playing!</p>}
-        {gamePhase !== 'setup' && <p className="text-lg text-muted-foreground">Test your skills against our AI.</p>}
+        {gamePhase !== 'setup' && <p className="text-lg text-muted-foreground">Test your skills against our AI ({aiDifficulty} level).</p>}
       </header>
 
       {gamePhase === 'setup' && (
-        <Card className="max-w-md mx-auto shadow-lg">
+        <Card className="max-w-md mx-auto shadow-lg rounded-lg">
           <CardHeader>
-            <CardTitle className="text-2xl">Game Settings</CardTitle>
-            <CardDescription>Choose your time control and AI difficulty.</CardDescription>
+            <CardTitle className="text-2xl text-center">Game Settings</CardTitle>
+            <CardDescription className="text-center">Choose your time control and AI difficulty.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 p-6">
             <div className="space-y-2">
-              <Label htmlFor="time-control" className="flex items-center"><TimerIcon className="mr-2 h-5 w-5 text-primary" />Time Control (per player)</Label>
+              <Label htmlFor="time-control" className="flex items-center text-sm font-medium"><TimerIcon className="mr-2 h-5 w-5 text-primary" />Time Control (per player)</Label>
               <Select value={String(selectedTimeControl)} onValueChange={(value) => setSelectedTimeControl(Number(value))}>
-                <SelectTrigger id="time-control">
+                <SelectTrigger id="time-control" className="w-full">
                   <SelectValue placeholder="Select time control" />
                 </SelectTrigger>
                 <SelectContent>
@@ -505,9 +552,9 @@ export default function PlayBotPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ai-difficulty" className="flex items-center"><CpuIcon className="mr-2 h-5 w-5 text-primary" />AI Difficulty</Label>
+              <Label htmlFor="ai-difficulty" className="flex items-center text-sm font-medium"><CpuIcon className="mr-2 h-5 w-5 text-primary" />AI Difficulty</Label>
               <Select value={aiDifficulty} onValueChange={(value) => setAiDifficulty(value as DifficultyLevel)}>
-                <SelectTrigger id="ai-difficulty">
+                <SelectTrigger id="ai-difficulty" className="w-full">
                   <SelectValue placeholder="Select AI difficulty" />
                 </SelectTrigger>
                 <SelectContent>
@@ -517,7 +564,7 @@ export default function PlayBotPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={startGame} size="lg" className="w-full">
+            <Button onClick={startGame} size="lg" className="w-full mt-4">
               <Play className="mr-2 h-5 w-5" /> Start Game
             </Button>
           </CardContent>
@@ -526,7 +573,7 @@ export default function PlayBotPage() {
 
       {gamePhase !== 'setup' && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 items-start">
             <div className="md:col-span-2 relative">
               <Chessboard
                 boardState={board}
@@ -536,24 +583,24 @@ export default function PlayBotPage() {
                 onPieceDragStart={handlePieceDragStart}
                 onSquareDrop={handleSquareDrop}
                 onDragEndCapture={handleDragEnd}
-                currentPlayerColor={'white'}
+                currentPlayerColor={'white'} // Player is always white vs bot
                 lastMove={lastMove}
                 highlightedMoves={highlightedMoves}
               />
               {showPromotionDialog && promotingSquare && (
-                <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10 rounded-md">
-                  <Card className="p-4 shadow-2xl w-auto">
-                    <CardHeader className="p-3">
+                <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-10 rounded-md">
+                  <Card className="p-4 shadow-2xl w-auto bg-background border-primary">
+                    <CardHeader className="p-3 text-center">
                       <CardTitle className="text-xl">Promote Pawn</CardTitle>
                       <CardDescription className="text-sm">Choose a piece:</CardDescription>
                     </CardHeader>
-                    <CardContent className="p-3 flex justify-center space-x-2">
+                    <CardContent className="p-3 flex justify-center space-x-2 sm:space-x-3">
                       {(['Q', 'R', 'B', 'N'] as PieceSymbol[]).map(pType => (
                         <Button
                           key={pType}
                           onClick={() => handlePromotionChoice(pType)}
                           variant="outline"
-                          className="w-16 h-16 md:w-20 md:h-20 flex items-center justify-center hover:bg-accent focus:bg-accent"
+                          className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center hover:bg-accent focus:bg-accent text-3xl"
                           aria-label={`Promote to ${pType}`}
                         >
                           <Piece piece={createPiece(pType, 'white')} pieceStyle={pieceStyle} />
@@ -566,44 +613,44 @@ export default function PlayBotPage() {
             </div>
 
             <div className="space-y-6">
-              <Card className="shadow-md">
-                <CardHeader>
-                  <CardTitle>Game Info</CardTitle>
+              <Card className="shadow-md rounded-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-xl">Game Info</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center text-lg">
-                     <span className={cn("font-semibold", activeTimer === 'white' && isPlayerTurn && "text-primary")}>You: {formatTime(whiteTime)}</span>
-                     <span className={cn("font-semibold", activeTimer === 'black' && !isPlayerTurn && "text-primary")}>AI: {formatTime(blackTime)}</span>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex justify-between items-center text-base">
+                     <span className={cn("font-semibold", activeTimer === 'white' && isPlayerTurn && "text-primary animate-pulse")}>You: {formatTime(whiteTime)}</span>
+                     <span className={cn("font-semibold", activeTimer === 'black' && !isPlayerTurn && "text-primary animate-pulse")}>AI: {formatTime(blackTime)}</span>
                   </div>
                   <p className="flex items-center">
-                    <Info className="mr-2 h-5 w-5 text-blue-500" />
-                    Status: <span className="font-semibold ml-1">{getGameStatusMessage()}</span>
+                    <Info className="mr-2 h-4 w-4 text-blue-500 shrink-0" />
+                    <span className="font-medium mr-1">Status:</span> <span className="text-muted-foreground">{getGameStatusMessage()}</span>
                   </p>
                   <p className="flex items-center">
-                    <Check className="mr-2 h-5 w-5 text-green-500" />
-                    Turn: <span className="font-semibold ml-1">
-                      {getGameStatusMessage().startsWith('You Win') || getGameStatusMessage().startsWith('AI Wins') || getGameStatusMessage().startsWith('Draw') ? 'Game Over' : (isPlayerTurn && !showPromotionDialog ? 'Your (White)' : (!isPlayerTurn && !showPromotionDialog ? 'AI (Black)' : 'Promoting...'))}
+                    <Check className="mr-2 h-4 w-4 text-green-500 shrink-0" />
+                    <span className="font-medium mr-1">Turn:</span> <span className="text-muted-foreground">
+                      {gamePhase === 'ended' ? 'Game Over' : (isPlayerTurn && !showPromotionDialog ? 'Your (White)' : (!isPlayerTurn && !showPromotionDialog ? 'AI (Black)' : 'Promoting...'))}
                     </span>
                   </p>
                    <p className="flex items-center">
-                    <BarChart3 className="mr-2 h-5 w-5 text-gray-500" />
-                    AI Level: <span className="font-semibold ml-1">{aiDifficulty}</span>
+                    <BarChart3 className="mr-2 h-4 w-4 text-gray-500 shrink-0" />
+                     <span className="font-medium mr-1">AI Level:</span> <span className="text-muted-foreground">{aiDifficulty}</span>
                   </p>
-                  <Button onClick={resetGame} variant="outline" className="w-full">
-                    <RotateCcw className="mr-2 h-4 w-4" /> {gamePhase === 'ended' ? 'New Game Settings' : 'Reset Game'}
+                  <Button onClick={resetGame} variant="outline" className="w-full mt-2">
+                    <RotateCcw className="mr-2 h-4 w-4" /> {gamePhase === 'ended' ? 'New Game Settings' : 'Reset Current Game'}
                   </Button>
                 </CardContent>
               </Card>
 
-              <Card className="shadow-md">
-                <CardHeader>
-                  <CardTitle className="flex items-center"><Settings className="mr-2 h-5 w-5 text-gray-600" />Board & Piece Styles</CardTitle>
+              <Card className="shadow-md rounded-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-xl flex items-center"><Settings className="mr-2 h-5 w-5 text-gray-600" />Display</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
+                <CardContent className="space-y-4 text-sm">
+                  <div className="space-y-1">
                     <Label htmlFor="piece-style">Piece Style</Label>
                     <Select value={pieceStyle} onValueChange={(value) => setPieceStyle(value as PieceStyle)}>
-                      <SelectTrigger id="piece-style">
+                      <SelectTrigger id="piece-style" className="w-full">
                         <SelectValue placeholder="Select piece style" />
                       </SelectTrigger>
                       <SelectContent>
@@ -612,10 +659,10 @@ export default function PlayBotPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label htmlFor="board-theme">Board Theme</Label>
                     <Select value={boardTheme} onValueChange={(value) => setBoardTheme(value as BoardTheme)}>
-                      <SelectTrigger id="board-theme">
+                      <SelectTrigger id="board-theme" className="w-full">
                         <SelectValue placeholder="Select board theme" />
                       </SelectTrigger>
                       <SelectContent>
@@ -632,8 +679,8 @@ export default function PlayBotPage() {
               {gamePhase === 'ended' && showFeedbackButton && winner !== null && (
                 <AiFeedbackSection
                   gameHistoryPgn={generateMockPgn()}
-                  playerRating={1200}
-                  opponentRating={aiDifficulty === 'Beginner' ? 1000 : aiDifficulty === 'Medium' ? 1300 : 1600}
+                  playerRating={1200} // Mock rating
+                  opponentRating={aiDifficulty === 'Beginner' ? 1000 : aiDifficulty === 'Medium' ? 1300 : 1600} // Mock AI rating
                   userName="Player"
                 />
               )}
@@ -641,10 +688,10 @@ export default function PlayBotPage() {
           </div>
 
           {moveHistory.length > 0 && (
-            <Card className="mt-8">
+            <Card className="mt-8 rounded-lg">
               <CardHeader><CardTitle>Move History</CardTitle></CardHeader>
               <CardContent>
-                <ol className="list-decimal list-inside space-y-1 max-h-48 overflow-y-auto text-sm text-muted-foreground">
+                <ol className="list-decimal list-inside space-y-1 max-h-48 overflow-y-auto text-sm text-muted-foreground pl-2">
                   {moveHistory.map((move, index) => <li key={index}>{move}</li>)}
                 </ol>
               </CardContent>
@@ -655,3 +702,4 @@ export default function PlayBotPage() {
     </div>
   );
 }
+
