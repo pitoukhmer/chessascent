@@ -38,13 +38,13 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
         setIsSpeaking(false);
         utteranceRef.current = null;
       };
-      newUtterance.onerror = (event) => {
-        console.error("Speech synthesis error:", event);
+      newUtterance.onerror = (event: SpeechSynthesisErrorEvent) => { // Explicitly type event
+        console.error("Speech synthesis error code:", event.error, "Full event object:", event);
         setIsSpeaking(false);
         utteranceRef.current = null;
         toast({
           title: "Speech Error",
-          description: "Could not play coach's voice.",
+          description: `Could not play coach's voice. (${event.error || 'Unknown error'})`,
           variant: "destructive",
         });
       };
@@ -61,11 +61,12 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
   const stopSpeaking = () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+      // Ensure onend is also cleared if we manually stop it
       if (utteranceRef.current) {
         utteranceRef.current.onend = null; 
-        utteranceRef.current = null;
       }
+      setIsSpeaking(false); 
+      utteranceRef.current = null;
     }
   };
   
@@ -77,8 +78,6 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Removed useEffect that auto-played speech on suggestion change.
-  // Speech is now only triggered by the button.
 
   const handleGetSuggestion = async () => {
     setIsLoading(true);
