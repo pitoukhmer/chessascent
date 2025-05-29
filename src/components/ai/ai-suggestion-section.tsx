@@ -40,13 +40,19 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
       };
       newUtterance.onerror = (event: SpeechSynthesisErrorEvent) => { // Explicitly type event
         console.error("Speech synthesis error code:", event.error, "Full event object:", event);
+        // Avoid showing toast for 'interrupted' as it's often a normal lifecycle event
+        if (event.error !== 'interrupted') {
+          toast({
+            title: "Speech Error",
+            description: `Could not play coach's voice. (${event.error || 'Unknown error'})`,
+            variant: "destructive",
+          });
+        }
         setIsSpeaking(false);
+        if (utteranceRef.current) { // Ensure onend is also cleared on error
+            utteranceRef.current.onend = null;
+        }
         utteranceRef.current = null;
-        toast({
-          title: "Speech Error",
-          description: `Could not play coach's voice. (${event.error || 'Unknown error'})`,
-          variant: "destructive",
-        });
       };
       window.speechSynthesis.speak(newUtterance);
     } else {
