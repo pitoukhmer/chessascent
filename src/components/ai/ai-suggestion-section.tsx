@@ -26,9 +26,8 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
 
   const speakText = (text: string) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      // Cancel any ongoing speech
       if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
+        window.speechSynthesis.cancel(); // Stop current speech before starting new
       }
 
       const newUtterance = new SpeechSynthesisUtterance(text);
@@ -64,7 +63,7 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
       if (utteranceRef.current) {
-        utteranceRef.current.onend = null; // Prevent onend from firing after manual stop
+        utteranceRef.current.onend = null; 
         utteranceRef.current = null;
       }
     }
@@ -78,18 +77,13 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (suggestion?.explanation) {
-      speakText(suggestion.explanation);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestion?.explanation]);
-
+  // Removed useEffect that auto-played speech on suggestion change.
+  // Speech is now only triggered by the button.
 
   const handleGetSuggestion = async () => {
     setIsLoading(true);
     setSuggestion(null);
-    stopSpeaking(); // Stop any current speech before fetching new suggestion
+    stopSpeaking(); 
     try {
       const input: MoveSuggestionInput = { fen, moveHistory, tutorialStep, playerQuery };
       const result = await getMoveSuggestion(input);
@@ -159,7 +153,7 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
                       <Square className="h-4 w-4 text-red-500" />
                     </Button>
                   ) : (
-                    <Button variant="ghost" size="icon" onClick={() => speakText(suggestion.explanation)} aria-label="Speak explanation"  className="h-7 w-7">
+                    <Button variant="ghost" size="icon" onClick={() => speakText(suggestion.explanation)} aria-label="Speak explanation"  className="h-7 w-7" disabled={isLoading}>
                       <Volume2 className="h-4 w-4 text-primary" />
                     </Button>
                   )
