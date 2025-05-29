@@ -1,9 +1,12 @@
+
 'use client';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lightbulb, Loader2 } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Textarea } from '@/components/ui/textarea';
+import { Lightbulb, Loader2, Sparkles, MessageCircle } from 'lucide-react';
 import { getMoveSuggestion, type MoveSuggestionInput, type MoveSuggestionOutput } from '@/ai/flows/ai-move-suggestions';
 import { useToast } from '@/hooks/use-toast';
 
@@ -15,6 +18,7 @@ interface AiSuggestionSectionProps {
 
 export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiSuggestionSectionProps) {
   const [suggestion, setSuggestion] = useState<MoveSuggestionOutput | null>(null);
+  const [playerQuery, setPlayerQuery] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -22,14 +26,14 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
     setIsLoading(true);
     setSuggestion(null);
     try {
-      const input: MoveSuggestionInput = { fen, moveHistory, tutorialStep };
+      const input: MoveSuggestionInput = { fen, moveHistory, tutorialStep, playerQuery };
       const result = await getMoveSuggestion(input);
       setSuggestion(result);
     } catch (error) {
-      console.error("Error getting AI suggestion:", error);
+      console.error("Error getting AI coach suggestion:", error);
       toast({
         title: "Error",
-        description: "Failed to get AI suggestion. Please try again.",
+        description: "Failed to get coach's suggestion. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -38,65 +42,55 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
   };
 
   return (
-    <Card className="mt-6 shadow-md">
-      <CardHeader>
-        <CardTitle className="flex items-center"><Lightbulb className="mr-2 h-6 w-6 text-accent" /> AI Move Suggestion</CardTitle>
-        <CardDescription>Stuck? Let our AI suggest a move and explain its reasoning.</CardDescription>
+    <Card className="mt-6 shadow-md rounded-lg overflow-hidden">
+      <CardHeader className="bg-primary/10">
+        <div className="flex items-center space-x-3">
+          <Avatar className="h-12 w-12 border-2 border-primary">
+            <AvatarImage src="https://placehold.co/100x100.png?text=Coach" alt="Chess Coach" data-ai-hint="coach avatar" />
+            <AvatarFallback className="bg-primary text-primary-foreground text-lg">
+              <MessageCircle className="h-6 w-6" />
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <CardTitle className="text-xl flex items-center text-primary">Chat with Coach</CardTitle>
+            <CardDescription className="text-sm text-primary/80">Ask for help or a move suggestion.</CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <Button onClick={handleGetSuggestion} disabled={isLoading} className="w-full">
+      <CardContent className="p-4 space-y-4">
+        <Textarea
+          placeholder="Ask a question (e.g., 'What should I do with my rook?' or 'Is there a good attacking move?'). Leave blank for a general suggestion."
+          value={playerQuery}
+          onChange={(e) => setPlayerQuery(e.target.value)}
+          className="min-h-[80px] focus:border-accent"
+        />
+        <Button onClick={handleGetSuggestion} disabled={isLoading} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Getting Suggestion...
+              Coach is thinking...
             </>
           ) : (
-            'Get AI Suggestion'
+            <>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Ask Coach
+            </>
           )}
         </Button>
         {suggestion && (
-          <div className="p-4 bg-secondary/50 rounded-md border border-secondary space-y-2 animate-fadeIn">
-            <p className="text-lg font-semibold">
-              Suggested Move: <span className="text-primary">{suggestion.move}</span>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              <strong>Explanation:</strong> {suggestion.explanation}
-            </p>
+          <div className="mt-4 p-4 bg-secondary/50 rounded-md border border-secondary space-y-3 animate-fadeIn">
+            {suggestion.move && suggestion.move.toLowerCase() !== 'n/a' && (
+              <p className="text-lg font-semibold">
+                Coach suggests: <span className="text-primary">{suggestion.move}</span>
+              </p>
+            )}
+            <div>
+              <h4 className="font-medium text-md mb-1 text-foreground">Coach's Explanation:</h4>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{suggestion.explanation}</p>
+            </div>
           </div>
         )}
       </CardContent>
     </Card>
   );
 }
-
-// Add fadeIn animation to globals.css or tailwind.config.js if not present
-// Example for tailwind.config.js:
-// theme: {
-//   extend: {
-//     keyframes: {
-//       fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-//     },
-//     animation: {
-//       fadeIn: 'fadeIn 0.5s ease-in-out',
-//     },
-//   },
-// },
-// Make sure to add this keyframe to your tailwind.config.ts animation section
-// 'fadeIn': 'fadeIn 0.5s ease-in-out'
-// keyframes: {
-//   fadeIn: {
-//     from: { opacity: '0' },
-//     to: { opacity: '1' },
-//   },
-// ... other keyframes
-// }
-// animation: {
-//   fadeIn: 'fadeIn 0.5s ease-in-out',
-// ... other animations
-// }
-// For simplicity, assuming 'animate-fadeIn' will be handled if custom animations are added.
-// Standard ShadCN animations like animate-in should suffice.
-// Let's use ShadCN's animation classes, so the above notes are for context.
-// The `animate-in` class usually comes from `tailwindcss-animate` with `data-[state=open]` or similar.
-// For a simple reveal, we might just rely on conditional rendering or a simple CSS transition.
-// Using a simple conditional render for now.
