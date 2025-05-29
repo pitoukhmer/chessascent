@@ -39,9 +39,10 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
         utteranceRef.current = null;
       };
       newUtterance.onerror = (event: SpeechSynthesisErrorEvent) => { // Explicitly type event
-        console.error("Speech synthesis error code:", event.error, "Full event object:", event);
-        // Avoid showing toast for 'interrupted' as it's often a normal lifecycle event
-        if (event.error !== 'interrupted') {
+        if (event.error === 'interrupted') {
+          console.log("Speech synthesis interrupted (normal event):", event.error, "Full event object:", event);
+        } else {
+          console.error("Speech synthesis error code:", event.error, "Full event object:", event);
           toast({
             title: "Speech Error",
             description: `Could not play coach's voice. (${event.error || 'Unknown error'})`,
@@ -49,8 +50,9 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
           });
         }
         setIsSpeaking(false);
-        if (utteranceRef.current) { // Ensure onend is also cleared on error
-            utteranceRef.current.onend = null;
+        if (utteranceRef.current) { 
+            utteranceRef.current.onend = null; // Clear onend to prevent it firing later
+            utteranceRef.current.onerror = null; // Clear onerror as well
         }
         utteranceRef.current = null;
       };
@@ -67,9 +69,9 @@ export function AiSuggestionSection({ fen, moveHistory = "", tutorialStep }: AiS
   const stopSpeaking = () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
-      // Ensure onend is also cleared if we manually stop it
       if (utteranceRef.current) {
         utteranceRef.current.onend = null; 
+        utteranceRef.current.onerror = null; 
       }
       setIsSpeaking(false); 
       utteranceRef.current = null;
